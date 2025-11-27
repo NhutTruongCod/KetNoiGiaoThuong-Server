@@ -1,0 +1,7 @@
+{
+  "watch": ["app", "config", "database", "routes", "resources"],
+  "ext": "php,js,html,css",
+  "ignore": ["storage/*", "public/*"],
+  "exec": "php artisan serve",
+  "stdin": false
+}

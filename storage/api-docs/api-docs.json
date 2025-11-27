@@ -1,0 +1,1849 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "KetNoiGiaoThuong API",
+        "description": "API Documentation - Trade Connection Platform",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://127.0.0.1:8000"
+        }
+    ],
+    "paths": {
+        "/api/auth/register": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Đăng ký tài khoản",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "full_name",
+                                    "email",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "full_name": {
+                                        "type": "string",
+                                        "example": "Trương Minh Nhựt"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "example": "user@example.com"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "example": "password123"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "example": "password123"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Account created"
+                    },
+                    "400": {
+                        "description": "Thiếu hoặc sai định dạng dữ liệu"
+                    },
+                    "409": {
+                        "description": "Email đã được sử dụng"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/verify-email": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Xác thực Email/OTP",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "otp_code"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    },
+                                    "otp_code": {
+                                        "type": "string",
+                                        "example": "123456"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Verified"
+                    },
+                    "400": {
+                        "description": "Thiếu email hoặc OTP"
+                    },
+                    "401": {
+                        "description": "OTP không hợp lệ/đã sử dụng/hết hạn"
+                    },
+                    "404": {
+                        "description": "Tài khoản không tồn tại"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/resend-verification-otp": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Gửi lại OTP xác thực email",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "example": "user@example.com"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OTP mới đã được gửi"
+                    },
+                    "400": {
+                        "description": "Email đã được xác thực/Thiếu email"
+                    },
+                    "404": {
+                        "description": "Tài khoản không tồn tại"
+                    },
+                    "429": {
+                        "description": "Quá nhiều yêu cầu (tối đa 5/phút)"
+                    },
+                    "500": {
+                        "description": "Lỗi gửi email"
+                    }
+                }
+            }
+        },
+        "/api/auth/login": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Đăng nhập",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login success"
+                    },
+                    "400": {
+                        "description": "Thiếu email/password"
+                    },
+                    "401": {
+                        "description": "Sai thông tin"
+                    },
+                    "403": {
+                        "description": "Tài khoản khóa/chưa xác thực"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/refresh": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Làm mới Token",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "refresh_token"
+                                ],
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Thiếu Refresh Token"
+                    },
+                    "401": {
+                        "description": "Token không hợp lệ/hết hạn"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/forgot-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Quên mật khẩu",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OTP sent"
+                    },
+                    "400": {
+                        "description": "Thiếu email"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy user"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/reset-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Đặt lại mật khẩu",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email",
+                                    "otp_code",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    },
+                                    "otp_code": {
+                                        "type": "string",
+                                        "example": "123456"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Reset success"
+                    },
+                    "400": {
+                        "description": "Sai định dạng"
+                    },
+                    "401": {
+                        "description": "OTP không hợp lệ/đã sử dụng/hết hạn"
+                    },
+                    "404": {
+                        "description": "User không tồn tại"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/auth/logout": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Đăng xuất",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "refresh_token"
+                                ],
+                                "properties": {
+                                    "refresh_token": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Logged out"
+                    },
+                    "401": {
+                        "description": "Token không hợp lệ"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/profile": {
+            "get": {
+                "tags": [
+                    "Identity"
+                ],
+                "summary": "Lấy thông tin hồ sơ người dùng",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập hoặc token không hợp lệ"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy thông tin người dùng"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ nội bộ"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Identity"
+                ],
+                "summary": "Cập nhật thông tin hồ sơ",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "identity_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "personal",
+                                            "business"
+                                        ]
+                                    },
+                                    "full_name": {
+                                        "type": "string"
+                                    },
+                                    "business_name": {
+                                        "type": "string"
+                                    },
+                                    "address": {
+                                        "type": "string"
+                                    },
+                                    "phone": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Cập nhật thành công"
+                    },
+                    "400": {
+                        "description": "Dữ liệu đầu vào không hợp lệ"
+                    },
+                    "401": {
+                        "description": "Người dùng chưa xác thực"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-request": {
+            "post": {
+                "tags": [
+                    "Identity"
+                ],
+                "summary": "Gửi yêu cầu xác minh doanh nghiệp",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "document_type",
+                                    "document_url"
+                                ],
+                                "properties": {
+                                    "document_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "id_card",
+                                            "business_license",
+                                            "tax_code"
+                                        ]
+                                    },
+                                    "document_url": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Yêu cầu đã được gửi thành công"
+                    },
+                    "400": {
+                        "description": "Thiếu thông tin bắt buộc"
+                    },
+                    "401": {
+                        "description": "Người dùng chưa đăng nhập"
+                    },
+                    "409": {
+                        "description": "Doanh nghiệp đã được xác minh hoặc đang chờ duyệt"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-history": {
+            "get": {
+                "tags": [
+                    "Identity"
+                ],
+                "summary": "Xem lịch sử xác minh doanh nghiệp",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách lịch sử xác minh"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-request/{id}/approve": {
+            "put": {
+                "tags": [
+                    "Identity - Admin"
+                ],
+                "summary": "Duyệt yêu cầu xác minh (dành cho Quản trị viên)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "admin_note": {
+                                        "type": "string",
+                                        "maxLength": 500
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Yêu cầu đã được duyệt"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Người dùng không có quyền duyệt"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu xác minh"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-request/{id}/reject": {
+            "put": {
+                "tags": [
+                    "Identity - Admin"
+                ],
+                "summary": "Từ chối yêu cầu xác minh (dành cho Quản trị viên)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "admin_note"
+                                ],
+                                "properties": {
+                                    "admin_note": {
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "description": "Lý do từ chối (bắt buộc)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Yêu cầu đã bị từ chối"
+                    },
+                    "400": {
+                        "description": "Thiếu lý do từ chối hoặc dữ liệu không hợp lệ"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Người dùng không có quyền từ chối"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu xác minh"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/moderation/report": {
+            "post": {
+                "tags": [
+                    "Moderation"
+                ],
+                "summary": "Gửi báo cáo vi phạm",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "target_user_id": {
+                                        "type": "integer",
+                                        "description": "ID user bị báo cáo (chọn 1 trong 2)"
+                                    },
+                                    "target_post_id": {
+                                        "type": "integer",
+                                        "description": "ID bài viết bị báo cáo (chọn 1 trong 2)"
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "minLength": 10,
+                                        "maxLength": 255,
+                                        "example": "Nội dung spam hoặc lừa đảo"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Báo cáo đã được gửi"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ hoặc không thể tự báo cáo"
+                    },
+                    "409": {
+                        "description": "Đã báo cáo trong vòng 24h"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/moderation/my-reports": {
+            "get": {
+                "tags": [
+                    "Moderation"
+                ],
+                "summary": "Xem báo cáo đã gửi",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách báo cáo của user"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/moderation/reports": {
+            "get": {
+                "tags": [
+                    "Moderation - Admin"
+                ],
+                "summary": "Danh sách tất cả báo cáo (Admin)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "reviewed",
+                                "action_taken",
+                                "dismissed"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "target_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "user",
+                                "post"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "description": "Tìm theo tên user"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách báo cáo với phân trang"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/moderation/reports/{id}": {
+            "get": {
+                "tags": [
+                    "Moderation - Admin"
+                ],
+                "summary": "Chi tiết báo cáo (Admin)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chi tiết báo cáo"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy báo cáo"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Moderation - Admin"
+                ],
+                "summary": "Xóa báo cáo (Admin)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Đã xóa báo cáo"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy báo cáo"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/moderation/reports/{id}/resolve": {
+            "put": {
+                "tags": [
+                    "Moderation - Admin"
+                ],
+                "summary": "Xử lý báo cáo (Admin)",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "action"
+                                ],
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "enum": [
+                                            "action_taken",
+                                            "dismissed"
+                                        ],
+                                        "description": "Hành động: xử lý vi phạm hoặc bỏ qua"
+                                    },
+                                    "admin_note": {
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "description": "Ghi chú của admin"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Đã xử lý báo cáo"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy báo cáo"
+                    },
+                    "409": {
+                        "description": "Báo cáo đã được xử lý trước đó"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-requests": {
+            "get": {
+                "tags": [
+                    "Identity - Admin"
+                ],
+                "summary": "Admin xem danh sách tất cả yêu cầu xác minh danh tính",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "approved",
+                                "rejected"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "document_type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "id_card",
+                                "business_license",
+                                "tax_code"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "description": "Tìm theo tên hoặc email người dùng"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Thời gian bắt đầu (created_at >= from)"
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Thời gian kết thúc (created_at <= to)"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100
+                        },
+                        "description": "Số bản ghi mỗi trang"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách yêu cầu xác minh (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Người dùng không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/identity/verify-requests/{id}": {
+            "get": {
+                "tags": [
+                    "Identity - Admin"
+                ],
+                "summary": "Admin xem chi tiết một yêu cầu xác minh",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chi tiết yêu cầu xác minh"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Người dùng không có quyền admin"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu xác minh"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/login-history": {
+            "get": {
+                "tags": [
+                    "Login History"
+                ],
+                "summary": "Xem lịch sử đăng nhập của chính mình",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15,
+                            "maximum": 100
+                        },
+                        "description": "Số bản ghi mỗi trang"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách lịch sử đăng nhập của user hiện tại (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/admin/login-history": {
+            "get": {
+                "tags": [
+                    "Login History - Admin"
+                ],
+                "summary": "Admin xem lịch sử đăng nhập của tất cả người dùng",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Lọc theo ID user"
+                    },
+                    {
+                        "name": "success",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Lọc theo kết quả đăng nhập (true/false)"
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Thời gian bắt đầu (logged_in_at >= from)"
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "description": "Thời gian kết thúc (logged_in_at <= to)"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100
+                        },
+                        "description": "Số bản ghi mỗi trang"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách lịch sử đăng nhập của tất cả user (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/admin/users/{userId}/login-history": {
+            "get": {
+                "tags": [
+                    "Login History - Admin"
+                ],
+                "summary": "Admin xem lịch sử đăng nhập của một user cụ thể",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "ID user cần xem"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100
+                        },
+                        "description": "Số bản ghi mỗi trang"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách lịch sử đăng nhập của user (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "403": {
+                        "description": "Không có quyền admin"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy user"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/notifications": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Lấy danh sách thông báo của người dùng hiện tại",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "is_read",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Lọc theo trạng thái đã đọc/chưa đọc"
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "system",
+                                "order",
+                                "promotion",
+                                "moderation"
+                            ]
+                        },
+                        "description": "Lọc theo loại thông báo"
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100
+                        },
+                        "description": "Số bản ghi mỗi trang"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách thông báo (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/notifications/{id}": {
+            "get": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Xem chi tiết một thông báo",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chi tiết thông báo"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy thông báo"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Xóa một thông báo",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Xóa thông báo thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy thông báo"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/notifications/{id}/read": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Đánh dấu một thông báo đã đọc",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Đánh dấu đã đọc thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy thông báo"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/notifications/read-all": {
+            "put": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Đánh dấu tất cả thông báo là đã đọc",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tất cả thông báo đã được đánh dấu đã đọc"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/notifications/delete-all": {
+            "delete": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Xóa toàn bộ thông báo của người dùng hiện tại",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Xóa toàn bộ thông báo thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/plans": {
+            "get": {
+                "tags": [
+                    "Plans"
+                ],
+                "summary": "Lấy danh sách gói thành viên",
+                "responses": {
+                    "200": {
+                        "description": "Danh sách gói đang hoạt động"
+                    }
+                }
+            }
+        },
+        "/api/plans/{id}": {
+            "get": {
+                "tags": [
+                    "Plans"
+                ],
+                "summary": "Chi tiết gói thành viên",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chi tiết gói"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy gói"
+                    }
+                }
+            }
+        },
+        "/api/subscriptions": {
+            "post": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Đăng ký gói thành viên mới",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "plan_id"
+                                ],
+                                "properties": {
+                                    "plan_id": {
+                                        "type": "integer"
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "example": "free"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Tạo subscription thành công"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Gói không khả dụng"
+                    }
+                }
+            }
+        },
+        "/api/subscriptions/{id}/renew": {
+            "put": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Gia hạn gói hiện tại",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "payment_method": {
+                                        "type": "string",
+                                        "example": "free"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Gia hạn thành công"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ hoặc gói không khả dụng"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Subscription không tồn tại"
+                    }
+                }
+            }
+        },
+        "/api/subscriptions/current": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Xem gói hiện tại của người dùng",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Thông tin gói hiện tại hoặc null"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    }
+                }
+            }
+        },
+        "/api/subscriptions/history": {
+            "get": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Lịch sử các gói đã đăng ký",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách subscription (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    }
+                }
+            }
+        },
+        "/api/subscriptions/{id}/cancel": {
+            "delete": {
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Hủy gói VIP trước thời hạn",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Hủy gói thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Subscription không tồn tại hoặc đã hủy"
+                    }
+                }
+            }
+        },
+        "/api/data/export/request": {
+            "post": {
+                "tags": [
+                    "Data Export"
+                ],
+                "summary": "Gửi yêu cầu xuất dữ liệu cá nhân",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "format": {
+                                        "type": "string",
+                                        "enum": [
+                                            "csv",
+                                            "json"
+                                        ],
+                                        "example": "json"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Tạo yêu cầu xuất dữ liệu thành công"
+                    },
+                    "400": {
+                        "description": "Dữ liệu không hợp lệ"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "409": {
+                        "description": "Đã tồn tại yêu cầu đang chờ"
+                    },
+                    "500": {
+                        "description": "Lỗi máy chủ"
+                    }
+                }
+            }
+        },
+        "/api/data/export/status/{id}": {
+            "get": {
+                "tags": [
+                    "Data Export"
+                ],
+                "summary": "Kiểm tra trạng thái yêu cầu xuất dữ liệu",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Thông tin trạng thái yêu cầu"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu"
+                    }
+                }
+            }
+        },
+        "/api/data/export/download/{id}": {
+            "get": {
+                "tags": [
+                    "Data Export"
+                ],
+                "summary": "Lấy thông tin tải file dữ liệu đã tạo",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Thông tin tải xuống (download_url, format)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu"
+                    },
+                    "409": {
+                        "description": "Yêu cầu chưa hoàn tất"
+                    }
+                }
+            }
+        },
+        "/api/data/export/cancel/{id}": {
+            "delete": {
+                "tags": [
+                    "Data Export"
+                ],
+                "summary": "Hủy một yêu cầu xuất dữ liệu đang xử lý",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Hủy yêu cầu thành công"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    },
+                    "404": {
+                        "description": "Không tìm thấy yêu cầu"
+                    },
+                    "409": {
+                        "description": "Không thể hủy (trạng thái không phù hợp)"
+                    }
+                }
+            }
+        },
+        "/api/data/export/history": {
+            "get": {
+                "tags": [
+                    "Data Export"
+                ],
+                "summary": "Xem lịch sử yêu cầu xuất dữ liệu của người dùng",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Danh sách yêu cầu (có phân trang)"
+                    },
+                    "401": {
+                        "description": "Chưa đăng nhập"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}

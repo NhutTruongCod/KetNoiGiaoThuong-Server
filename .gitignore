@@ -1,0 +1,83 @@
+# Dependencies
+/node_modules
+/vendor
+
+# Build files
+/public/build
+/public/hot
+/public/storage
+
+# Laravel specific
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/bootstrap/cache/*
+
+# Environment files (IMPORTANT - DO NOT PUSH TO GITHUB)
+.env
+.env.backup
+.env.production
+.env.local
+.env.*.local
+
+# IDE and Editor files
+/.fleet
+/.idea
+/.vscode
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Testing
+.phpunit.result.cache
+/coverage
+/.phpunit.cache
+
+# Homestead
+Homestead.json
+Homestead.yaml
+auth.json
+
+# Node/NPM
+npm-debug.log
+yarn-error.log
+yarn.lock
+package-lock.json
+
+# Composer
+composer.lock
+
+# Laravel Mix
+/public/css
+/public/js
+/public/mix-manifest.json
+
+# Logs
+*.log
+storage/logs/*
+!storage/logs/.gitkeep
+
+# Database
+*.sqlite
+*.sqlite-journal
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.swp
+*.swo
+*~
+
+# API Documentation (optional - uncomment if you want to exclude)
+# /storage/api-docs/api-docs.json

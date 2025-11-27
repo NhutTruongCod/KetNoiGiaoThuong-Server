@@ -1,0 +1,41 @@
+<?php
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\UserController;
+use App\Models\User;
+use App\Events\UserRegistered;
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider within a group which
+| is assigned the "api" middleware group. Enjoy building your API!
+|
+*/
+
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
+});
+
+
+Route::middleware(['force.json', 'throttle:60,1'])->group(function () {
+    Route::get('/users', [UserController::class, 'index']);
+});
+
+
+Route::get('/_demo/validation', function (Request $r) {
+    $r->validate(['email' => 'required|email']);
+});
+
+Route::get('/_demo/not-found', function () {
+    abort(404);
+});
+
+Route::get('/demo/events/welcome/{id}', function ($id) {
+    $user = User::findOrFail($id);    // lấy user có sẵn trong DB
+    event(new UserRegistered($user)); // bắn sự kiện -> listener -> notif + job
+    return response()->json(['ok' => true]);
+});

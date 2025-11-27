@@ -1,0 +1,63 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: tradehub-app
+        working_dir: /var/www/html
+        volumes:
+            - ./:/var/www/html
+        ports:
+            - "8010:8000" # http://localhost:8010
+        depends_on:
+            - db
+        environment:
+            APP_ENV: local
+            APP_DEBUG: "true"
+            DB_CONNECTION: mysql
+            DB_HOST: db
+            DB_PORT: 3306
+            DB_DATABASE: tradehub
+            DB_USERNAME: duy
+            DB_PASSWORD: duy1580@
+        command: >
+            bash -lc "php artisan serve --host=0.0.0.0 --port=8000"
+        restart: unless-stopped
+        networks: [ appnet ]
+
+    db:
+        image: mariadb:10.6
+        container_name: tradehub-db
+        environment:
+            MYSQL_DATABASE: tradehub
+            MYSQL_USER: duy
+            MYSQL_PASSWORD: duy1580@
+            MYSQL_ROOT_PASSWORD: rootpass
+        volumes:
+            - db_data:/var/lib/mysql
+        ports:
+            - "3308:3306" # host 3308 -> container 3306 (tránh đụng XAMPP:3307)
+        healthcheck:
+            test: [ "CMD-SHELL", "mysqladmin ping -uroot -prootpass || exit 1" ]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+            start_period: 10s
+        restart: unless-stopped
+        networks: [ appnet ]
+
+    adminer:
+        image: adminer:4
+        container_name: tradehub-adminer
+        depends_on: [ db ]
+        ports:
+            - "8081:8080" # http://localhost:8081
+        restart: unless-stopped
+        networks: [ appnet ]
+
+volumes:
+    db_data:
+
+
+networks:
+    appnet:
