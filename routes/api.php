@@ -19,8 +19,10 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\DataExportController;
-
-
+use App\Http\Controllers\StoreController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ListingController;
+use App\Http\Controllers\PromotionController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -153,3 +155,42 @@ Route::prefix('payments')->group(function () {
 });
 
 Route::fallback(fn () => response()->json(['message' => 'Not Found'], 404));
+
+Route::prefix('stores')->group(function () {
+    Route::get('/', [StoreController::class, 'index']);      // Lấy danh sách (có phân trang, search)
+    Route::post('/', [StoreController::class, 'store']);     // Tạo mới
+    Route::get('/{store}', [StoreController::class, 'show']); // Xem chi tiết 1 cửa hàng
+    Route::put('/{store}', [StoreController::class, 'update']); // Cập nhật
+    Route::delete('/{store}', [StoreController::class, 'destroy']); // Xóa
+});
+
+Route::prefix('categories')->group(function () {
+    // API lấy danh sách gọn (cho dropdown chọn danh mục)
+    Route::get('/simple-list', [CategoryController::class, 'simpleList']); 
+    
+    // Các API CRUD chuẩn
+    Route::get('/', [CategoryController::class, 'index']);      // Danh sách & Search
+    Route::post('/', [CategoryController::class, 'store']);     // Tạo mới
+    Route::get('/{category}', [CategoryController::class, 'show']); // Xem chi tiết
+    Route::put('/{category}', [CategoryController::class, 'update']); // Cập nhật
+    Route::delete('/{category}', [CategoryController::class, 'destroy']); // Xóa
+});
+
+Route::prefix('listings')->group(function () {
+    Route::get('/', [ListingController::class, 'index']);      // Danh sách (có lọc, tìm kiếm, phân trang)
+    Route::post('/', [ListingController::class, 'store']);     // Thêm mới
+    Route::get('/{listing}', [ListingController::class, 'show']); // Xem chi tiết
+    Route::put('/{listing}', [ListingController::class, 'update']); // Cập nhật
+    Route::delete('/{listing}', [ListingController::class, 'destroy']); // Xóa
+});
+
+Route::prefix('promotion')->group(function () {
+    Route::get('/active', [PromotionController::class, 'activePromotions']);
+    Route::patch('/{id}/featured', [PromotionController::class, 'updateFeatured']);
+    
+    Route::get('/', [PromotionController::class, 'index']);
+    Route::post('/', [PromotionController::class, 'store']);
+    Route::get('/{id}', [PromotionController::class, 'show']);
+    Route::put('/{id}', [PromotionController::class, 'update']);
+    Route::delete('/{id}', [PromotionController::class, 'destroy']);
+});
