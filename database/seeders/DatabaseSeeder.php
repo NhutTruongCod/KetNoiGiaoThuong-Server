@@ -15,30 +15,28 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        // 1. Tạo ông Admin (Mật khẩu là: password)
+        // 1. Admin (mật khẩu: password)
         User::create([
-            'name' => 'Admin',
-            'full_name' => 'Super Admin',
-            'email' => 'admin@gmail.com',
-            'phone' => '0900000001',
-            'password' => Hash::make('password'), // Tự động mã hóa
-            'role' => 'Admin',
-            'status' => 'active',
-            'is_verified' => true,
-            'is_active' => true,
+            'full_name'    => 'Super Admin',     // dùng đúng tên cột
+            'email'        => 'admin@gmail.com',
+            'phone'        => '0900000001',
+            'password_hash'=> Hash::make('password'),  // dùng đúng tên cột
+            'role'         => 'admin',            // enum: admin/seller/buyer
+            'status'       => 'active',
+            'is_verified'  => true,
+            'is_active'    => true,
         ]);
 
-        // 2. Tạo thêm ông User thường để test (Mật khẩu: password)
+        // 2. User test (mật khẩu: password)
         User::create([
-            'name' => 'User Test',
-            'full_name' => 'Khách Mua Hàng',
-            'email' => 'buyer@gmail.com',
-            'phone' => '0900000002',
-            'password' => 'password',
-            'role' => 'User',
-            'status' => 'active',
-            'is_verified' => true,
-            'is_active' => true,
+            'full_name'    => 'Khách Mua Hàng',
+            'email'        => 'buyer@gmail.com',
+            'phone'        => '0900000002',
+            'password_hash'=> Hash::make('password'),
+            'role'         => 'buyer',            // role hợp lệ
+            'status'       => 'active',
+            'is_verified'  => true,
+            'is_active'    => true,
         ]);
     }
 }
