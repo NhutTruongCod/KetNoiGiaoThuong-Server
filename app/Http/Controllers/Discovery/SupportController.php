@@ -57,37 +57,57 @@ class SupportController extends BaseApiController
         return $this->created($ticket->load('messages'));
     }
 
-    public function myTickets(Request $request)
+    /**
+     * GET /api/support/tickets
+     */
+    public function tickets(Request $request)
     {
         $user = $request->user();
+        $status = $request->input('status');
 
-        $tickets = SupportTicket::with('latestMessage')
-            ->where('user_id', $user->id)
-            ->orderByDesc('updated_at')
+        $query = SupportTicket::with('messages')
+            ->where('user_id', $user->id);
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $tickets = $query->orderByDesc('updated_at')
             ->paginate($request->integer('per_page', 20));
 
         return $this->paginate($tickets);
     }
 
-    public function show(Request $request, int $id)
+    /**
+     * GET /api/support/tickets/{ticket}
+     */
+    public function showTicket(Request $request, SupportTicket $ticket)
     {
         $user = $request->user();
 
-        $ticket = SupportTicket::with('messages')
-            ->where('user_id', $user->id)
-            ->findOrFail($id);
+        if ($ticket->user_id !== $user->id) {
+            return $this->fail(['message' => 'Không có quyền truy cập'], 403);
+        }
+
+        $ticket->load('messages');
 
         return $this->ok($ticket);
     }
 
-    public function reply(Request $request, int $id)
+    /**
+     * POST /api/support/tickets/{ticket}/messages
+     */
+    public function replyTicket(Request $request, SupportTicket $ticket)
     {
         $user = $request->user();
+        
+        if ($ticket->user_id !== $user->id) {
+            return $this->fail(['message' => 'Không có quyền truy cập'], 403);
+        }
+
         $v = $request->validate([
             'message' => 'required|string|max:4000',
         ]);
-
-        $ticket = SupportTicket::where('user_id', $user->id)->findOrFail($id);
 
         $msg = SupportMessage::create([
             'ticket_id'   => $ticket->id,
@@ -98,5 +118,21 @@ class SupportController extends BaseApiController
         $ticket->touch(); // update updated_at
 
         return $this->created($msg);
+    }
+
+    /**
+     * PUT /api/support/tickets/{ticket}/close
+     */
+    public function closeTicket(Request $request, SupportTicket $ticket)
+    {
+        $user = $request->user();
+        
+        if ($ticket->user_id !== $user->id) {
+            return $this->fail(['message' => 'Không có quyền truy cập'], 403);
+        }
+
+        $ticket->update(['status' => 'closed']);
+
+        return $this->ok($ticket);
     }
 }

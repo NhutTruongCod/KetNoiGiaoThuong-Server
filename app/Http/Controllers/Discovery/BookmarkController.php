@@ -10,12 +10,29 @@ use App\Models\Listing;
 /**
  * BA 3.4 — API Bookmarks
  * 
- * - GET  /api/bookmarks           (đã cover trong DiscoveryController@bookmarks)
- * - POST /api/bookmarks           (create)
- * - DELETE /api/bookmarks/{id}    (remove)
+ * - GET    /api/bookmarks
+ * - POST   /api/bookmarks
+ * - DELETE /api/bookmarks/{listing_id}
  */
 class BookmarkController extends BaseApiController
 {
+    /**
+     * GET /api/bookmarks
+     * Danh sách tin đăng đã đánh dấu
+     */
+    public function index(Request $request)
+    {
+        $user = $request->user();
+        $perPage = $request->input('per_page', 20);
+
+        $bookmarks = Bookmark::where('user_id', $user->id)
+            ->with('listing')
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        return $this->paginate($bookmarks);
+    }
+
     /**
      * POST /api/bookmarks
      * body: { listing_id: int }
@@ -32,16 +49,16 @@ class BookmarkController extends BaseApiController
             'listing_id' => $v['listing_id'],
         ]);
 
-        return $this->ok($bookmark);
+        return $this->created($bookmark->load('listing'));
     }
 
     /**
-     * DELETE /api/bookmarks/{id}
+     * DELETE /api/bookmarks/{listing_id}
      */
-    public function destroy(Request $request, int $id)
+    public function destroy(Request $request, int $listingId)
     {
         $user = $request->user();
-        $bookmark = Bookmark::where('id', $id)
+        $bookmark = Bookmark::where('listing_id', $listingId)
             ->where('user_id', $user->id)
             ->firstOrFail();
 

@@ -14,6 +14,11 @@ class ChatMessage extends Model
         'to_user_id',
         'listing_id',
         'body',
+        'is_read',
+    ];
+
+    protected $casts = [
+        'is_read' => 'boolean',
     ];
 
     public function fromUser()
@@ -24,5 +29,10 @@ class ChatMessage extends Model
     public function toUser()
     {
         return $this->belongsTo(User::class, 'to_user_id');
+    }
+
+    public function listing()
+    {
+        return $this->belongsTo(Listing::class);
     }
 }

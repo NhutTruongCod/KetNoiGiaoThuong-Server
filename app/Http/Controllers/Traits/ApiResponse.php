@@ -52,6 +52,36 @@ trait ApiResponse
         ]);
     }
 
+    protected function fail($data = [], $statusCode = 400)
+    {
+        return response()->json([
+            'success' => false,
+            'error'   => $data,
+            'meta'    => $this->meta(),
+        ], $statusCode);
+    }
+
+    protected function noContent()
+    {
+        return response()->json(null, 204);
+    }
+
+    protected function paginate(LengthAwarePaginator $paginator, array $meta = [])
+    {
+        $pagination = [
+            'current_page' => $paginator->currentPage(),
+            'per_page'     => $paginator->perPage(),
+            'total'        => $paginator->total(),
+            'last_page'    => $paginator->lastPage(),
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => $paginator->items(),
+            'meta'    => $this->meta(array_merge($meta, $pagination)),
+        ]);
+    }
+
     private function meta(array $extra = []): array
     {
         return array_merge([

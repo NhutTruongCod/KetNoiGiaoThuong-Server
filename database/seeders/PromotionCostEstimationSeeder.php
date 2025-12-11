@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\PromotionCostEstimation;
-use App\Models\Store;
+use App\Models\Shop;
 use App\Models\Listing;
 use Illuminate\Database\Seeder;
 
@@ -11,13 +11,13 @@ class PromotionCostEstimationSeeder extends Seeder
 {
     public function run(): void
     {
-        $stores = Store::limit(2)->get();
+        $shops = Shop::limit(2)->get();
         $listings = Listing::limit(3)->get();
 
-        if ($stores->count() > 0 && $listings->count() > 0) {
+        if ($shops->count() > 0 && $listings->count() > 0) {
             $estimations = [
                 [
-                    'store_id' => $stores[0]->id,
+                    'shop_id' => $shops[0]->id,
                     'listing_id' => $listings[0]->id,
                     'promotion_type' => 'banner',
                     'duration_days' => 7,
@@ -30,7 +30,7 @@ class PromotionCostEstimationSeeder extends Seeder
                     'estimated_conversions' => 35,
                 ],
                 [
-                    'store_id' => $stores[1]->id,
+                    'shop_id' => $shops[1]->id,
                     'listing_id' => $listings[1]->id,
                     'promotion_type' => 'video_ads',
                     'duration_days' => 10,
@@ -43,7 +43,7 @@ class PromotionCostEstimationSeeder extends Seeder
                     'estimated_conversions' => 60,
                 ],
                 [
-                    'store_id' => $stores[0]->id,
+                    'shop_id' => $shops[0]->id,
                     'listing_id' => $listings[2]->id,
                     'promotion_type' => 'social_media',
                     'duration_days' => 14,

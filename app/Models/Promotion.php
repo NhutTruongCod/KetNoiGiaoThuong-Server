@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Carbon\Carbon;
 
 class Promotion extends Model
@@ -12,63 +11,78 @@ class Promotion extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title',
-        'description',
-        'image_url',
+        'shop_id',
+        'listing_id',
+        'type',
+        'duration_days',
+        'budget',
+        'spent',
+        'daily_budget',
+        'impressions',
+        'clicks',
+        'ctr',
+        'conversions',
+        'conversion_rate',
+        'cost_per_click',
+        'cost_per_conversion',
+        'target_audience',
         'status',
         'start_date',
         'end_date',
-        'discount_percentage',
-        'min_order_amount',
-        'max_usage',
-        'promo_code',
         'is_featured',
+        'featured_position',
+        'payment_url',
+        'refund_amount',
+        'refund_note',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
-        'discount_percentage' => 'decimal:2',
-        'min_order_amount' => 'decimal:2',
+        'budget' => 'decimal:2',
+        'spent' => 'decimal:2',
+        'daily_budget' => 'decimal:2',
+        'ctr' => 'decimal:2',
+        'conversion_rate' => 'decimal:2',
+        'cost_per_click' => 'decimal:2',
+        'cost_per_conversion' => 'decimal:2',
+        'refund_amount' => 'decimal:2',
         'is_featured' => 'boolean',
+        'target_audience' => 'array',
     ];
+
+    protected $appends = ['remaining_budget', 'days_remaining'];
+
+    /**
+     * Relationship với Listing
+     */
+    public function listing()
+    {
+        return $this->belongsTo(Listing::class);
+    }
+
+    /**
+     * Relationship với Shop
+     */
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class);
+    }
 
     /**
      * Scope active promotions
      */
     public function scopeActive($query)
     {
-        $today = Carbon::today()->toDateString();
-        return $query->where('status', 'active')
-                    ->where('start_date', '<=', $today)
-                    ->where('end_date', '>=', $today);
+        return $query->where('status', 'active');
     }
 
     /**
-     * Scope by status
+     * Scope by type
      */
-    public function scopeByStatus($query, $status)
+    public function scopeByType($query, $type)
     {
-        $today = Carbon::today()->toDateString();
-        
-        switch ($status) {
-            case 'active':
-                return $query->where('status', 'active')
-                            ->where('start_date', '<=', $today)
-                            ->where('end_date', '>=', $today);
-            case 'expired':
-                return $query->where(function($q) use ($today) {
-                    $q->where('status', 'expired')
-                      ->orWhere('end_date', '<', $today);
-                });
-            case 'upcoming':
-                return $query->where('status', 'upcoming')
-                            ->where('start_date', '>', $today);
-            case 'inactive':
-                return $query->where('status', 'inactive');
-            default:
-                return $query;
-        }
+        return $query->where('type', $type);
     }
 
     /**
@@ -76,43 +90,148 @@ class Promotion extends Model
      */
     public function scopeFeatured($query)
     {
-        return $query->where('is_featured', true);
+        return $query->where('is_featured', true)
+                    ->orderBy('featured_position');
     }
 
     /**
-     * Check if promotion is currently active
+     * Get remaining budget
      */
-    public function getIsCurrentlyActiveAttribute()
+    public function getRemainingBudgetAttribute()
     {
-        $today = Carbon::today();
-        return $this->status === 'active' && 
-               $today->between($this->start_date, $this->end_date);
+        return max(0, $this->budget - $this->spent);
     }
 
     /**
-     * Update status based on dates
+     * Get days remaining
      */
-    public function updateStatus()
+    public function getDaysRemainingAttribute()
     {
-        $today = Carbon::today();
-        
-        if ($today->gt($this->end_date)) {
-            $this->status = 'expired';
-        } elseif ($today->between($this->start_date, $this->end_date)) {
-            $this->status = 'active';
-        } elseif ($today->lt($this->start_date)) {
-            $this->status = 'upcoming';
+        if (!$this->end_date) {
+            return 0;
         }
         
+        $today = Carbon::today();
+        $endDate = Carbon::parse($this->end_date);
+        
+        return max(0, $today->diffInDays($endDate, false));
+    }
+
+    /**
+     * Calculate and update CTR
+     */
+    public function updateCtr()
+    {
+        if ($this->impressions > 0) {
+            $this->ctr = ($this->clicks / $this->impressions) * 100;
+        } else {
+            $this->ctr = 0;
+        }
         $this->save();
     }
 
     /**
-     * Relationship với Listings (nhiều-nhiều)
+     * Calculate and update conversion rate
      */
-    public function listings()
+    public function updateConversionRate()
     {
-        return $this->belongsToMany(Listing::class, 'promotion_listing')
-                    ->withTimestamps();
+        if ($this->clicks > 0) {
+            $this->conversion_rate = ($this->conversions / $this->clicks) * 100;
+        } else {
+            $this->conversion_rate = 0;
+        }
+        $this->save();
+    }
+
+    /**
+     * Calculate and update cost per click
+     */
+    public function updateCostPerClick()
+    {
+        if ($this->clicks > 0) {
+            $this->cost_per_click = $this->spent / $this->clicks;
+        } else {
+            $this->cost_per_click = 0;
+        }
+        $this->save();
+    }
+
+    /**
+     * Calculate and update cost per conversion
+     */
+    public function updateCostPerConversion()
+    {
+        if ($this->conversions > 0) {
+            $this->cost_per_conversion = $this->spent / $this->conversions;
+        } else {
+            $this->cost_per_conversion = 0;
+        }
+        $this->save();
+    }
+
+    /**
+     * Update all performance metrics
+     */
+    public function updatePerformanceMetrics()
+    {
+        $this->updateCtr();
+        $this->updateConversionRate();
+        $this->updateCostPerClick();
+        $this->updateCostPerConversion();
+    }
+
+    /**
+     * Track impression
+     */
+    public function trackImpression()
+    {
+        $this->increment('impressions');
+        $this->updateCtr();
+    }
+
+    /**
+     * Track click
+     */
+    public function trackClick($cost = 0)
+    {
+        $this->increment('clicks');
+        $this->increment('spent', $cost);
+        $this->updatePerformanceMetrics();
+    }
+
+    /**
+     * Track conversion
+     */
+    public function trackConversion()
+    {
+        $this->increment('conversions');
+        $this->updatePerformanceMetrics();
+    }
+
+    /**
+     * Check if budget exhausted
+     */
+    public function isBudgetExhausted()
+    {
+        return $this->spent >= $this->budget;
+    }
+
+    /**
+     * Check if expired
+     */
+    public function isExpired()
+    {
+        return Carbon::today()->gt($this->end_date);
+    }
+
+    /**
+     * Auto-complete if budget exhausted or expired
+     */
+    public function checkAndComplete()
+    {
+        if ($this->status === 'active' && ($this->isBudgetExhausted() || $this->isExpired())) {
+            $this->status = 'completed';
+            $this->save();
+        }
     }
 }

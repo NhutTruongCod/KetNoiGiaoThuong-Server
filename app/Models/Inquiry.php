@@ -12,9 +12,14 @@ class Inquiry extends Model
     protected $fillable = [
         'listing_id',
         'name',
-       'email',
+        'email',
         'phone',
         'message',
         'source_ip',
     ];
+
+    public function listing()
+    {
+        return $this->belongsTo(Listing::class);
+    }
 }

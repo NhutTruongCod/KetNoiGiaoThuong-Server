@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('promotion_cost_estimations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('store_id')->constrained()->onDelete('cascade');
+            // Đổi từ stores sang shops
+            $table->foreignId('shop_id')->constrained('shops')->onDelete('cascade');
             $table->foreignId('listing_id')->nullable()->constrained()->onDelete('cascade');
             $table->enum('promotion_type', ['banner', 'video_ads', 'social_media', 'search_ads', 'email_marketing', 'in_app_ads']);
             $table->integer('duration_days');
@@ -27,12 +28,12 @@ return new class extends Migration
             $table->timestamps();
             
             // Indexes for performance
-            $table->index('store_id');
+            $table->index('shop_id');
             $table->index('listing_id');
             $table->index('promotion_type');
             $table->index('status');
             $table->index('created_at');
-            $table->index(['store_id', 'status']);
+            $table->index(['shop_id', 'status']);
         });
     }
 

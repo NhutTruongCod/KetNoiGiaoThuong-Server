@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 
 class PromotionRequest extends FormRequest
@@ -15,30 +14,26 @@ class PromotionRequest extends FormRequest
 
     public function rules(): array
     {
-        $promotionId = $this->route('promotion') ? $this->route('promotion')->id : null;
+        $isUpdate = $this->isMethod('PUT') || $this->isMethod('PATCH');
 
         $rules = [
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string|max:1000',
-            'image_url' => 'required|url|max:500',
-            'status' => 'required|in:active,inactive,expired,upcoming',
-            'start_date' => 'required|date|after_or_equal:today',
-            'end_date' => 'required|date|after:start_date',
-            'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'min_order_amount' => 'nullable|numeric|min:0',
-            'max_usage' => 'nullable|integer|min:1',
-            'promo_code' => [
-                'nullable',
-                'string',
-                'max:50',
-                Rule::unique('promotions', 'promo_code')->ignore($promotionId)
-            ],
-            'is_featured' => 'boolean',
+            'listing_id' => 'required|exists:listings,id',
+            'type' => 'required|in:featured,top_search,homepage_banner,category_banner',
+            'duration_days' => 'required|integer|min:1|max:90',
+            'budget' => 'required|numeric|min:50000',
+            'target_audience' => 'nullable|array',
+            'target_audience.locations' => 'nullable|array',
+            'target_audience.age_range' => 'nullable|array|size:2',
+            'target_audience.interests' => 'nullable|array',
+            'start_date' => 'nullable|date|after_or_equal:today',
         ];
 
-        // Neu update, cho phep start_date o qua khu
-        if ($this->isMethod('PUT') || $this->isMethod('PATCH')) {
-            $rules['start_date'] = 'required|date';
+        if ($isUpdate) {
+            $rules['listing_id'] = 'sometimes|exists:listings,id';
+            $rules['type'] = 'sometimes|in:featured,top_search,homepage_banner,category_banner';
+            $rules['duration_days'] = 'sometimes|integer|min:1|max:90';
+            $rules['budget'] = 'sometimes|numeric|min:50000';
+            $rules['start_date'] = 'sometimes|date';
         }
 
         return $rules;
@@ -47,39 +42,24 @@ class PromotionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'title.required' => 'Tieu de khuyen mai la bat buoc.',
-            'title.max' => 'Tieu de khong duoc vuot qua 255 ky tu.',
-            'image_url.required' => 'URL hinh anh la bat buoc.',
-            'image_url.url' => 'URL hinh anh khong hop le.',
-            'status.required' => 'Trang thai la bat buoc.',
-            'status.in' => 'Trang thai khong hop le.',
-            'start_date.required' => 'Ngay bat dau la bat buoc.',
-            'start_date.after_or_equal' => 'Ngay bat dau phai tu hom nay tro di.',
-            'end_date.required' => 'Ngay ket thuc la bat buoc.',
-            'end_date.after' => 'Ngay ket thuc phai sau ngay bat dau.',
-            'discount_percentage.min' => 'Phan tram giam gia phai lon hon hoac bang 0.',
-            'discount_percentage.max' => 'Phan tram giam gia khong duoc vuot qua 100.',
-            'min_order_amount.min' => 'Gia tri don hang toi thieu phai lon hon hoac bang 0.',
-            'max_usage.min' => 'So lan su dung toi da phai lon hon 0.',
-            'promo_code.unique' => 'Ma khuyen mai da ton tai.',
+            'listing_id.required' => 'Listing ID là bắt buộc.',
+            'listing_id.exists' => 'Listing không tồn tại.',
+            'type.required' => 'Loại quảng cáo là bắt buộc.',
+            'type.in' => 'Loại quảng cáo không hợp lệ.',
+            'duration_days.required' => 'Số ngày chạy là bắt buộc.',
+            'duration_days.min' => 'Số ngày chạy tối thiểu là 1.',
+            'duration_days.max' => 'Số ngày chạy tối đa là 90.',
+            'budget.required' => 'Ngân sách là bắt buộc.',
+            'budget.min' => 'Ngân sách tối thiểu là 50,000 VND.',
+            'start_date.after_or_equal' => 'Ngày bắt đầu phải từ hôm nay trở đi.',
         ];
     }
 
     protected function prepareForValidation()
     {
-        // Tu dong dat status theo ngay neu khong co
-        if (!$this->has('status') && $this->has('start_date') && $this->has('end_date')) {
-            $today = Carbon::today();
-            $startDate = Carbon::parse($this->start_date);
-            $endDate = Carbon::parse($this->end_date);
-
-            if ($today->gt($endDate)) {
-                $this->merge(['status' => 'expired']);
-            } elseif ($today->between($startDate, $endDate)) {
-                $this->merge(['status' => 'active']);
-            } elseif ($today->lt($startDate)) {
-                $this->merge(['status' => 'upcoming']);
-            }
+        // Set default start_date to today if not provided
+        if (!$this->has('start_date')) {
+            $this->merge(['start_date' => Carbon::today()->toDateString()]);
         }
     }
 }

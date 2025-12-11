@@ -10,9 +10,22 @@ class ListingLike extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'listing_id',
+        'user_id',
     ];
+
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    /**
+     * Relationships
+     */
+    public function listing()
+    {
+        return $this->belongsTo(Listing::class);
+    }
 
     public function user()
     {

@@ -7,40 +7,37 @@ use App\Models\SubscriptionPlan;
 class PlanController extends Controller
 {
     /**
-     * GET /api/plans
-     * Danh sach cac goi dang hoat dong
+     * 1. GET /plans - Danh sách gói thành viên
      */
     public function index()
     {
-        $plans = SubscriptionPlan::where('is_active', true)
+        $plans = SubscriptionPlan::active()
+            ->orderBy('sort_order')
             ->orderBy('price')
             ->get();
 
         return response()->json([
-            'status' => 'success',
-            'data' => $plans,
+            'data' => $plans
         ]);
     }
 
     /**
-     * GET /api/plans/{id}
-     * Chi tiet mot goi cu the
+     * 2. GET /plans/{id} - Chi tiết gói thành viên
      */
     public function show($id)
     {
-        $plan = SubscriptionPlan::where('is_active', true)->find($id);
+        $plan = SubscriptionPlan::active()->find($id);
 
         if (!$plan) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Plan not found',
+                'message' => 'Plan not found'
             ], 404);
         }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $plan,
-        ]);
+        // Add total_subscribers
+        $plan->total_subscribers = $plan->total_subscribers;
+
+        return response()->json($plan);
     }
 }
 

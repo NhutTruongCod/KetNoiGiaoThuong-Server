@@ -10,7 +10,7 @@ class PromotionCostEstimation extends Model
     use HasFactory;
 
     protected $fillable = [
-        'store_id',
+        'shop_id',
         'listing_id',
         'promotion_type',
         'duration_days',
@@ -38,9 +38,9 @@ class PromotionCostEstimation extends Model
     /**
      * Relationship với Store
      */
-    public function store()
+    public function shop()
     {
-        return $this->belongsTo(Store::class);
+        return $this->belongsTo(Shop::class);
     }
 
     /**
@@ -52,12 +52,12 @@ class PromotionCostEstimation extends Model
     }
 
     /**
-     * Scope by store
+     * Scope by shop
      */
-    public function scopeByStore($query, $storeId)
+    public function scopeByShop($query, $shopId)
     {
-        if ($storeId) {
-            return $query->where('store_id', $storeId);
+        if ($shopId) {
+            return $query->where('shop_id', $shopId);
         }
         return $query;
     }

@@ -12,10 +12,14 @@ class Category extends Model
     use HasFactory;
 
     protected $fillable = [
+        'shop_id',
+        'user_id',
         'name',
         'slug',
         'description',
+        'parent_id',
         'is_active',
+        'status',
     ];
 
     protected $casts = [
@@ -33,6 +37,11 @@ class Category extends Model
             if (empty($category->slug)) {
                 $category->slug = Str::slug($category->name);
             }
+            
+            // Auto set user_id from auth
+            if (empty($category->user_id) && auth()->check()) {
+                $category->user_id = auth()->id();
+            }
         });
 
         static::updating(function ($category) {
@@ -40,6 +49,22 @@ class Category extends Model
                 $category->slug = Str::slug($category->name);
             }
         });
+    }
+
+    /**
+     * Relationship với Shop
+     */
+    public function shop()
+    {
+        return $this->belongsTo(Shop::class);
+    }
+
+    /**
+     * Relationship với User (creator)
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**
@@ -51,11 +76,35 @@ class Category extends Model
     }
 
     /**
+     * Relationship với parent category
+     */
+    public function parent()
+    {
+        return $this->belongsTo(Category::class, 'parent_id');
+    }
+
+    /**
+     * Relationship với child categories
+     */
+    public function children()
+    {
+        return $this->hasMany(Category::class, 'parent_id');
+    }
+
+    /**
      * Scope active categories
      */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope by shop
+     */
+    public function scopeByShop($query, $shopId)
+    {
+        return $query->where('shop_id', $shopId);
     }
 
     /**
@@ -80,6 +129,6 @@ class Category extends Model
      */
     public function getRouteKeyName()
     {
-        return 'slug';
+        return 'id'; // Dùng id thay vì slug vì slug chỉ unique trong shop
     }
 }

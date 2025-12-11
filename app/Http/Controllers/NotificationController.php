@@ -8,200 +8,176 @@ use Illuminate\Http\Request;
 class NotificationController extends Controller
 {
     /**
-     * GET /api/notifications
-     * Lấy danh sách thông báo của user hiện tại (có phân trang + filter)
+     * 1. GET /notifications - Lấy danh sách thông báo
      */
     public function index(Request $request)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            $query = Notification::where('user_id', $user->id);
+        $query = Notification::where('user_id', $user->id);
 
-            if ($request->filled('is_read')) {
-                $isRead = filter_var($request->is_read, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-                if (!is_null($isRead)) {
-                    $query->where('is_read', $isRead);
-                }
-            }
-
-            if ($request->filled('type')) {
-                $query->where('type', $request->type);
-            }
-
-            $perPage = (int) $request->get('per_page', 20);
-            $perPage = $perPage > 0 && $perPage <= 100 ? $perPage : 20;
-
-            $notifications = $query->orderBy('created_at', 'desc')->paginate($perPage);
-
-            return response()->json([
-                'status' => 'success',
-                'data' => $notifications->items(),
-                'meta' => [
-                    'current_page' => $notifications->currentPage(),
-                    'total_pages' => $notifications->lastPage(),
-                    'total_items' => $notifications->total(),
-                    'per_page' => $notifications->perPage(),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
+        // Filters
+        if ($request->has('unread_only') && filter_var($request->unread_only, FILTER_VALIDATE_BOOLEAN)) {
+            $query->unread();
         }
+
+        if ($request->has('type')) {
+            $query->byType($request->type);
+        }
+
+        if ($request->has('priority')) {
+            $query->byPriority($request->priority);
+        }
+
+        if ($request->has('date_from') || $request->has('date_to')) {
+            $query->dateRange($request->date_from, $request->date_to);
+        }
+
+        // Pagination
+        $perPage = (int) $request->get('per_page', 20);
+        $perPage = $perPage > 0 && $perPage <= 100 ? $perPage : 20;
+
+        $notifications = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+        // Summary
+        $summary = [
+            'total_notifications' => Notification::where('user_id', $user->id)->count(),
+            'unread_count' => Notification::where('user_id', $user->id)->unread()->count(),
+        ];
+
+        return response()->json([
+            'data' => $notifications->items(),
+            'meta' => [
+                'current_page' => $notifications->currentPage(),
+                'per_page' => $notifications->perPage(),
+                'total' => $notifications->total(),
+                'last_page' => $notifications->lastPage(),
+            ],
+            'summary' => $summary,
+        ]);
     }
 
     /**
-     * GET /api/notifications/{id}
-     * Xem chi tiết một thông báo
+     * 2. GET /notifications/{id} - Xem chi tiết thông báo
      */
     public function show(Request $request, $id)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            $notification = Notification::where('user_id', $user->id)->find($id);
+        $notification = Notification::where('user_id', $user->id)->find($id);
 
-            if (!$notification) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Notification not found',
-                ], 404);
-            }
-
+        if (!$notification) {
             return response()->json([
-                'status' => 'success',
-                'data' => $notification,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Notification not found'
+            ], 404);
         }
+
+        // Check ownership
+        if ($notification->user_id != $user->id) {
+            return response()->json([
+                'message' => 'You can only view your own notifications'
+            ], 403);
+        }
+
+        return response()->json($notification);
     }
 
     /**
-     * PUT /api/notifications/{id}/read
-     * Đánh dấu một thông báo là đã đọc
+     * 3. PUT /notifications/{id}/read - Đánh dấu đã đọc
      */
     public function markAsRead(Request $request, $id)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            $notification = Notification::where('user_id', $user->id)->find($id);
+        $notification = Notification::where('user_id', $user->id)->find($id);
 
-            if (!$notification) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Notification not found',
-                ], 404);
-            }
-
-            if (!$notification->is_read) {
-                $notification->is_read = true;
-                $notification->save();
-            }
-
+        if (!$notification) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Notification marked as read',
-                'data' => $notification,
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Notification not found'
+            ], 404);
         }
+
+        $notification->markAsRead();
+
+        return response()->json([
+            'message' => 'Notification marked as read',
+            'data' => [
+                'id' => $notification->id,
+                'is_read' => $notification->is_read,
+                'read_at' => $notification->read_at,
+            ]
+        ]);
     }
 
     /**
-     * PUT /api/notifications/read-all
-     * Đánh dấu tất cả thông báo của user hiện tại là đã đọc
+     * 4. PUT /notifications/read-all - Đánh dấu tất cả đã đọc
      */
     public function markAllAsRead(Request $request)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            Notification::where('user_id', $user->id)
-                ->where('is_read', false)
-                ->update(['is_read' => true]);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'All notifications marked as read',
+        $readAt = now();
+        $markedCount = Notification::where('user_id', $user->id)
+            ->where('is_read', false)
+            ->update([
+                'is_read' => true,
+                'read_at' => $readAt,
             ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+
+        return response()->json([
+            'message' => 'All notifications marked as read',
+            'data' => [
+                'marked_count' => $markedCount,
+                'read_at' => $readAt,
+            ]
+        ]);
     }
 
     /**
-     * DELETE /api/notifications/{id}
-     * Xóa một thông báo cụ thể
+     * 5. DELETE /notifications/{id} - Xóa một thông báo
      */
     public function destroy(Request $request, $id)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            $notification = Notification::where('user_id', $user->id)->find($id);
+        $notification = Notification::where('user_id', $user->id)->find($id);
 
-            if (!$notification) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Notification not found',
-                ], 404);
-            }
-
-            $notification->delete();
-
+        if (!$notification) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Notification deleted successfully',
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => 'Notification not found'
+            ], 404);
         }
+
+        // Check ownership
+        if ($notification->user_id != $user->id) {
+            return response()->json([
+                'message' => 'You can only delete your own notifications'
+            ], 403);
+        }
+
+        $notification->delete();
+
+        return response()->json([
+            'message' => 'Notification deleted successfully'
+        ]);
     }
 
     /**
-     * DELETE /api/notifications/delete-all
-     * Xóa tất cả thông báo của user hiện tại
+     * 6. DELETE /notifications/delete-all - Xóa tất cả thông báo
      */
     public function destroyAll(Request $request)
     {
-        try {
-            $user = $request->user('api');
+        $user = $request->user('api');
 
-            Notification::where('user_id', $user->id)->delete();
+        $deletedCount = Notification::where('user_id', $user->id)->count();
+        Notification::where('user_id', $user->id)->delete();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'All notifications deleted successfully',
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Internal server error',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            'message' => 'All notifications deleted successfully',
+            'data' => [
+                'deleted_count' => $deletedCount
+            ]
+        ]);
     }
 }
 
