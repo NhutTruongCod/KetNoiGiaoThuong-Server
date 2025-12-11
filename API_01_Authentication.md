@@ -348,12 +348,12 @@ Accept: application/json
 
 **Body → raw → JSON:**
 ```json
-{
-  "email": "abc@example.com",
-  "token": "reset_token_from_email",
-  "password": "NewPassword123!",
-  "password_confirmation": "NewPassword123!"
-}
+  {
+    "email": "abc@example.com",
+    "token": "reset_token_from_email",
+    "password": "NewPassword123!",
+    "password_confirmation": "NewPassword123!"
+  }
 ```
 
 ### Response mẫu

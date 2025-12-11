@@ -15,7 +15,11 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Xử lý đấu giá kết thúc - chạy mỗi phút
+        $schedule->command('auctions:process-ended')->everyMinute();
+        
+        // Kiểm tra thanh toán đấu giá hết hạn - chạy mỗi 5 phút
+        $schedule->command('auctions:check-expired-payments')->everyFiveMinutes();
     }
 
     /**

@@ -160,11 +160,20 @@ class ListingSeeder extends Seeder
         ];
 
         foreach ($listings as $index => $listingData) {
+            // Chọn seller theo vòng lặp
             $seller = $sellers[$index % $sellers->count()];
-            $shop = $shops->count() > 0 ? $shops[$index % $shops->count()] : null;
+            
+            // Tìm shop thuộc về seller này (quan trọng: phải cùng owner)
+            $shop = \App\Models\Shop::where('owner_user_id', $seller->id)->first();
+            
+            // Nếu seller chưa có shop, bỏ qua listing này
+            if (!$shop) {
+                $this->command->warn("⚠️  Seller {$seller->email} chưa có shop, bỏ qua listing: {$listingData['title']}");
+                continue;
+            }
 
             $listingData['user_id'] = $seller->id;
-            $listingData['shop_id'] = $shop?->id;
+            $listingData['shop_id'] = $shop->id;
             $listingData['slug'] = Str::slug($listingData['title']) . '-' . time() . '-' . $index;
             $listingData['is_active'] = true;
             $listingData['is_public'] = true;

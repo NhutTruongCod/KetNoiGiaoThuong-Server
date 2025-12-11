@@ -311,7 +311,7 @@ Authorization: Bearer {{seller_token}}
 ### Request
 
 **Method:** `PUT`  
-**URL:** `{{base_url}}/listings/123`
+**URL:** `  `
 
 **Headers:**
 ```
@@ -519,3 +519,177 @@ if (pm.response.code === 201) {
 - Slug tự động tạo từ title
 - Views count tăng mỗi lần xem chi tiết
 - Featured listings hiển thị ưu tiên
+
+
+---
+
+## 7. Upload ảnh sản phẩm – POST /listings/{listing}/images
+
+**Mục đích:** Upload file ảnh trực tiếp cho sản phẩm (thay vì nhập URL).
+
+### Request
+
+**Method:** `POST`  
+**URL:** `{{base_url}}/listings/123/images`
+
+**Headers:**
+```
+Accept: application/json
+Authorization: Bearer {{seller_token}}
+Content-Type: multipart/form-data
+```
+
+**Body → form-data:**
+```
+images[]: (file) image1.jpg
+images[]: (file) image2.png
+images[]: (file) image3.webp
+```
+
+**Giới hạn:**
+- Tối đa 10 ảnh mỗi lần upload
+- Mỗi ảnh tối đa 5MB
+- Định dạng: jpeg, png, jpg, gif, webp
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Upload 3 ảnh thành công",
+  "data": {
+    "uploaded": [
+      {
+        "id": 1,
+        "listing_id": 123,
+        "url": "http://localhost:8000/storage/listings/123/listing_123_1701849600_0.jpg",
+        "sort_order": 1
+      },
+      {
+        "id": 2,
+        "listing_id": 123,
+        "url": "http://localhost:8000/storage/listings/123/listing_123_1701849600_1.png",
+        "sort_order": 2
+      }
+    ],
+    "all_images": [
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_0.jpg",
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_1.png"
+    ]
+  }
+}
+```
+
+**Error - Validation (422):**
+```json
+{
+  "status": "error",
+  "message": "Validation failed",
+  "errors": {
+    "images.0": ["Mỗi ảnh tối đa 5MB"],
+    "images.1": ["Chỉ chấp nhận định dạng: jpeg, png, jpg, gif, webp"]
+  }
+}
+```
+
+---
+
+## 8. Xóa ảnh sản phẩm – DELETE /listings/{listing}/images/{imageId}
+
+**Mục đích:** Xóa một ảnh của sản phẩm.
+
+### Request
+
+**Method:** `DELETE`  
+**URL:** `{{base_url}}/listings/123/images/5`
+
+**Headers:**
+```
+Accept: application/json
+Authorization: Bearer {{seller_token}}
+```
+
+**Body:** Không cần
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Đã xóa ảnh",
+  "data": {
+    "remaining_images": [
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_1.png"
+    ]
+  }
+}
+```
+
+---
+
+## 9. Sắp xếp lại thứ tự ảnh – PUT /listings/{listing}/images/reorder
+
+**Mục đích:** Thay đổi thứ tự hiển thị ảnh (ảnh đầu tiên là ảnh chính).
+
+### Request
+
+**Method:** `PUT`  
+**URL:** `{{base_url}}/listings/123/images/reorder`
+
+**Headers:**
+```
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{seller_token}}
+```
+
+**Body → raw → JSON:**
+```json
+{
+  "image_ids": [3, 1, 2]
+}
+```
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Đã sắp xếp lại ảnh",
+  "data": {
+    "images": [
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_2.jpg",
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_0.jpg",
+      "http://localhost:8000/storage/listings/123/listing_123_1701849600_1.png"
+    ]
+  }
+}
+```
+
+---
+
+## Test Upload Ảnh với cURL
+
+```bash
+# Upload nhiều ảnh
+curl -X POST "http://localhost:8000/api/listings/123/images" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "images[]=@/path/to/image1.jpg" \
+  -F "images[]=@/path/to/image2.png"
+
+# Xóa ảnh
+curl -X DELETE "http://localhost:8000/api/listings/123/images/5" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Sắp xếp lại
+curl -X PUT "http://localhost:8000/api/listings/123/images/reorder" \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"image_ids": [3, 1, 2]}'
+```

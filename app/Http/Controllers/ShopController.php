@@ -232,4 +232,80 @@ class ShopController extends Controller
             'message' => 'Shop deleted successfully'
         ]);
     }
+
+    /**
+     * GET /api/shops/{shop}/listings - Lấy danh sách listings của shop
+     */
+    public function listings(Request $request, Shop $shop): JsonResponse
+    {
+        $query = $shop->listings()->with(['user']);
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        // Filter by type
+        if ($request->has('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        // Search
+        if ($search = $request->input('search')) {
+            $query->where(function($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        // Sorting
+        $sortField = $request->input('sort', 'created_at');
+        $sortOrder = $request->input('order', 'desc');
+        
+        $allowedSorts = ['created_at', 'title', 'price_cents', 'stock_qty'];
+        if (in_array($sortField, $allowedSorts)) {
+            $query->orderBy($sortField, $sortOrder);
+        }
+
+        $perPage = min($request->input('per_page', 20), 100);
+        $listings = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => $listings->items(),
+            'meta' => [
+                'current_page' => $listings->currentPage(),
+                'per_page' => $listings->perPage(),
+                'total' => $listings->total(),
+                'last_page' => $listings->lastPage(),
+            ]
+        ]);
+    }
+
+    /**
+     * GET /api/my-shop - Lấy shop của seller hiện tại
+     */
+    public function myShop(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->canCreateListing()) {
+            return response()->json([
+                'message' => 'Only sellers can have shops'
+            ], 403);
+        }
+
+        $shop = Shop::where('owner_user_id', $user->id)->first();
+
+        if (!$shop) {
+            return response()->json([
+                'message' => 'You do not have a shop yet'
+            ], 404);
+        }
+
+        $shop->load('owner:id,full_name,email,phone');
+
+        return response()->json([
+            'data' => $shop
+        ]);
+    }
 }

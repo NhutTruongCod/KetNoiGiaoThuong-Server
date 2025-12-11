@@ -17,17 +17,28 @@ class Order extends Model
         'shop_id',
         'listing_id',
         'seller_id',
+        'product_type',
+        'chat_confirmed',
+        'chat_confirmed_at',
         'quantity',
         'unit_price',
         'total_amount',
         'shipping_fee',
         'discount_amount',
         'tax_amount',
+        'platform_fee',
+        'seller_receive',
         'final_amount',
         'status',
         'payment_method',
         'payment_status',
+        'wallet_transaction_id',
+        'paid_at',
+        'seller_received_at',
+        'seller_wallet_transaction_id',
         'shipping_address',
+        'seller_contact',
+        'buyer_contact',
         'note',
         'tracking_number',
         'shipped_at',
@@ -35,20 +46,40 @@ class Order extends Model
         'cancelled_at',
         'cancel_reason',
         'coupon_code',
+        // Refund fields
+        'refund_requested_at',
+        'refund_reason',
+        'refund_evidence',
+        'refund_processed_at',
+        'refund_processed_by',
+        'refund_admin_note',
     ];
+
+    protected $appends = ['has_review'];
 
     protected $casts = [
         'shipping_address' => 'array',
+        'seller_contact' => 'array',
+        'buyer_contact' => 'array',
+        'chat_confirmed' => 'boolean',
         'quantity' => 'integer',
         'unit_price' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'shipping_fee' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
+        'platform_fee' => 'decimal:2',
+        'seller_receive' => 'decimal:2',
         'final_amount' => 'decimal:2',
+        'chat_confirmed_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'seller_received_at' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'refund_requested_at' => 'datetime',
+        'refund_evidence' => 'array',
+        'refund_processed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -86,6 +117,19 @@ class Order extends Model
     public function statusHistory()
     {
         return $this->hasMany(OrderStatusHistory::class, 'order_id')->orderBy('created_at', 'desc');
+    }
+
+    public function review()
+    {
+        return $this->hasOne(Review::class, 'order_id');
+    }
+
+    /**
+     * Check if order has been reviewed
+     */
+    public function getHasReviewAttribute()
+    {
+        return $this->review()->exists();
     }
 
     /**
@@ -147,6 +191,26 @@ class Order extends Model
     public function isCancelled()
     {
         return $this->status === 'cancelled';
+    }
+    
+    public function isDigital()
+    {
+        return $this->product_type === 'digital';
+    }
+    
+    public function isPhysical()
+    {
+        return $this->product_type === 'physical';
+    }
+    
+    public function needsChatConfirmation()
+    {
+        return $this->isDigital() && !$this->chat_confirmed;
+    }
+    
+    public function isPaid()
+    {
+        return $this->payment_status === 'paid';
     }
 
     /**

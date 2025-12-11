@@ -16,7 +16,7 @@ class Kernel extends HttpKernel
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
-        \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        \App\Http\Middleware\ConvertEmptyStringsToNull::class,
 
         // Cross-cutting của bạn
         \App\Http\Middleware\ForceJson::class,
@@ -47,6 +47,10 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\RequestCorrelation::class,
 	        \App\Http\Middleware\RequestTimer::class,
             'request.corr',
+            // Tự động refresh token khi gần hết hạn
+            \App\Http\Middleware\RefreshTokenMiddleware::class,
+            // Kiểm tra user bị banned/inactive
+            \App\Http\Middleware\CheckUserStatus::class,
         ],
     ];
 

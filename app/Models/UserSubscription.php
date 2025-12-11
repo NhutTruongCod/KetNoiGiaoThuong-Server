@@ -15,6 +15,8 @@ class UserSubscription extends Model
         'discount_amount',
         'final_amount',
         'payment_method',
+        'payment_code',
+        'payment_proof',
         'coupon_code',
         'status',
         'start_date',
@@ -24,6 +26,9 @@ class UserSubscription extends Model
         'canceled_at',
         'is_active',
         'auto_renew',
+        'admin_note',
+        'approved_by',
+        'approved_at',
     ];
 
     public $timestamps = true;
@@ -38,6 +43,7 @@ class UserSubscription extends Model
         'started_at' => 'datetime',
         'expires_at' => 'datetime',
         'canceled_at' => 'datetime',
+        'approved_at' => 'datetime',
         'is_active' => 'boolean',
         'auto_renew' => 'boolean',
         'created_at' => 'datetime',

@@ -4,6 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\Order;
+use App\Models\Listing;
+use App\Models\Shop;
+use App\Models\Promotion;
 use Illuminate\Database\Seeder;
 
 class NotificationSeeder extends Seeder
@@ -12,68 +16,94 @@ class NotificationSeeder extends Seeder
     {
         $users = User::all();
 
-        $notificationTemplates = [
-            [
-                'type' => 'order',
-                'title' => 'Đơn hàng mới',
-                'message' => 'Bạn có đơn hàng mới #ORD-20251201-0001',
-                'icon' => 'shopping-cart',
-                'priority' => 'high',
-                'data' => ['order_id' => 1, 'order_number' => 'ORD-20251201-0001', 'amount' => 29990000],
-                'action_url' => '/orders/1',
-                'action_text' => 'Xem đơn hàng',
-            ],
-            [
-                'type' => 'payment',
-                'title' => 'Thanh toán thành công',
-                'message' => 'Thanh toán đơn hàng #ORD-20251201-0001 đã thành công',
-                'icon' => 'credit-card',
-                'priority' => 'normal',
-                'data' => ['payment_id' => 1, 'order_id' => 1, 'amount' => 29990000],
-                'action_url' => '/payments/1',
-                'action_text' => 'Xem thanh toán',
-            ],
-            [
-                'type' => 'review',
-                'title' => 'Đánh giá mới',
-                'message' => 'Sản phẩm của bạn nhận được đánh giá 5 sao',
-                'icon' => 'star',
-                'priority' => 'normal',
-                'data' => ['review_id' => 1, 'listing_id' => 123, 'rating' => 5],
-                'action_url' => '/reviews/1',
-                'action_text' => 'Xem đánh giá',
-            ],
-            [
-                'type' => 'message',
-                'title' => 'Tin nhắn mới',
-                'message' => 'Bạn có tin nhắn mới từ Nguyễn Văn B',
-                'icon' => 'message',
-                'priority' => 'high',
-                'data' => ['message_id' => 1, 'sender_id' => 5, 'sender_name' => 'Nguyễn Văn B'],
-                'action_url' => '/messages/1',
-                'action_text' => 'Xem tin nhắn',
-            ],
-            [
-                'type' => 'listing',
-                'title' => 'Tin đăng được duyệt',
-                'message' => 'Tin đăng "iPhone 15 Pro Max" đã được duyệt',
-                'icon' => 'check-circle',
-                'priority' => 'normal',
-                'data' => ['listing_id' => 123, 'title' => 'iPhone 15 Pro Max'],
-                'action_url' => '/listings/123',
-                'action_text' => 'Xem tin đăng',
-            ],
-            [
-                'type' => 'shop',
-                'title' => 'Gian hàng được xác minh',
-                'message' => 'Gian hàng của bạn đã được xác minh',
-                'icon' => 'store',
-                'priority' => 'high',
-                'data' => ['shop_id' => 1],
-                'action_url' => '/shops/1',
-                'action_text' => 'Xem gian hàng',
-            ],
-            [
+        foreach ($users as $user) {
+            $notifications = [];
+            
+            // 1. Order notifications - chỉ tạo cho orders mà user là buyer hoặc seller
+            $userOrders = Order::where('buyer_id', $user->id)
+                ->orWhere('seller_id', $user->id)
+                ->take(3)
+                ->get();
+            
+            foreach ($userOrders as $order) {
+                $isBuyer = $order->buyer_id == $user->id;
+                $notifications[] = [
+                    'type' => 'order',
+                    'title' => $isBuyer ? 'Cập nhật đơn hàng' : 'Đơn hàng mới',
+                    'message' => $isBuyer 
+                        ? 'Đơn hàng #' . $order->order_number . ' đã được cập nhật'
+                        : 'Bạn có đơn hàng mới #' . $order->order_number,
+                    'icon' => 'shopping-cart',
+                    'priority' => 'high',
+                    'data' => [
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'amount' => $order->final_amount,
+                        'status' => $order->status,
+                    ],
+                    'action_url' => '/orders/' . $order->id,
+                    'action_text' => 'Xem đơn hàng',
+                ];
+            }
+            
+            // 2. Listing notifications - chỉ cho listings của user
+            $userListings = Listing::where('user_id', $user->id)->take(2)->get();
+            foreach ($userListings as $listing) {
+                $notifications[] = [
+                    'type' => 'listing',
+                    'title' => 'Tin đăng được duyệt',
+                    'message' => 'Tin đăng "' . $listing->title . '" đã được duyệt',
+                    'icon' => 'check-circle',
+                    'priority' => 'normal',
+                    'data' => [
+                        'listing_id' => $listing->id,
+                        'title' => $listing->title,
+                    ],
+                    'action_url' => '/listings/' . $listing->id,
+                    'action_text' => 'Xem tin đăng',
+                ];
+            }
+            
+            // 3. Shop notifications - chỉ cho shop của user
+            $userShop = Shop::where('owner_user_id', $user->id)->first();
+            if ($userShop) {
+                $notifications[] = [
+                    'type' => 'shop',
+                    'title' => 'Gian hàng được xác minh',
+                    'message' => 'Gian hàng "' . $userShop->name . '" đã được xác minh',
+                    'icon' => 'store',
+                    'priority' => 'high',
+                    'data' => [
+                        'shop_id' => $userShop->id,
+                        'shop_name' => $userShop->name,
+                    ],
+                    'action_url' => '/shops/' . $userShop->id,
+                    'action_text' => 'Xem gian hàng',
+                ];
+            }
+            
+            // 4. Promotion notifications - chỉ cho promotions của shop của user
+            if ($userShop) {
+                $userPromotions = Promotion::where('shop_id', $userShop->id)->take(2)->get();
+                foreach ($userPromotions as $promotion) {
+                    $notifications[] = [
+                        'type' => 'promotion',
+                        'title' => 'Quảng cáo được duyệt',
+                        'message' => 'Chiến dịch quảng cáo của bạn đã được duyệt',
+                        'icon' => 'megaphone',
+                        'priority' => 'normal',
+                        'data' => [
+                            'promotion_id' => $promotion->id,
+                            'listing_id' => $promotion->listing_id,
+                        ],
+                        'action_url' => '/promotion/' . $promotion->id,
+                        'action_text' => 'Xem quảng cáo',
+                    ];
+                }
+            }
+            
+            // 5. System notifications - cho tất cả users
+            $notifications[] = [
                 'type' => 'system',
                 'title' => 'Cập nhật hệ thống',
                 'message' => 'Hệ thống sẽ bảo trì vào 2h sáng ngày 05/12/2025',
@@ -82,59 +112,46 @@ class NotificationSeeder extends Seeder
                 'data' => ['maintenance_date' => '2025-12-05T02:00:00.000000Z'],
                 'action_url' => null,
                 'action_text' => null,
-            ],
-            [
-                'type' => 'promotion',
-                'title' => 'Quảng cáo được duyệt',
-                'message' => 'Chiến dịch quảng cáo của bạn đã được duyệt',
-                'icon' => 'megaphone',
-                'priority' => 'normal',
-                'data' => ['promotion_id' => 1],
-                'action_url' => '/promotions/1',
-                'action_text' => 'Xem quảng cáo',
-            ],
-            [
-                'type' => 'verification',
-                'title' => 'Xác minh danh tính',
-                'message' => 'Yêu cầu xác minh danh tính của bạn đã được chấp nhận',
-                'icon' => 'shield-check',
-                'priority' => 'high',
-                'data' => ['verification_id' => 1],
-                'action_url' => '/verification',
-                'action_text' => 'Xem chi tiết',
-            ],
-        ];
-
-        foreach ($users as $user) {
-            // Tạo 5-10 notifications cho mỗi user
-            $count = rand(5, 10);
+            ];
             
-            for ($i = 0; $i < $count; $i++) {
-                $template = $notificationTemplates[array_rand($notificationTemplates)];
-                $isRead = rand(1, 10) > 3; // 70% đã đọc
+            // 6. Wallet notification
+            $notifications[] = [
+                'type' => 'wallet',
+                'title' => 'Nạp tiền thành công',
+                'message' => 'Bạn đã nạp thành công 1,000,000 VND vào ví',
+                'icon' => 'wallet',
+                'priority' => 'high',
+                'data' => ['amount' => 1000000],
+                'action_url' => '/wallet',
+                'action_text' => 'Xem ví',
+            ];
+            
+            // Tạo notifications
+            foreach ($notifications as $notif) {
+                $isRead = rand(1, 10) > 4; // 60% đã đọc
                 
-                $notification = [
+                $data = [
                     'user_id' => $user->id,
-                    'type' => $template['type'],
-                    'title' => $template['title'],
-                    'message' => $template['message'],
-                    'data' => $template['data'],
-                    'action_url' => $template['action_url'],
-                    'action_text' => $template['action_text'],
-                    'icon' => $template['icon'],
-                    'priority' => $template['priority'],
+                    'type' => $notif['type'],
+                    'title' => $notif['title'],
+                    'message' => $notif['message'],
+                    'data' => $notif['data'],
+                    'action_url' => $notif['action_url'],
+                    'action_text' => $notif['action_text'],
+                    'icon' => $notif['icon'],
+                    'priority' => $notif['priority'],
                     'is_read' => $isRead,
                     'created_at' => now()->subDays(rand(0, 30))->subHours(rand(0, 23)),
                 ];
 
                 if ($isRead) {
-                    $notification['read_at'] = now()->subDays(rand(0, 15));
+                    $data['read_at'] = now()->subDays(rand(0, 15));
                 }
 
-                Notification::create($notification);
+                Notification::create($data);
             }
         }
 
-        $this->command->info('Notifications seeded successfully!');
+        $this->command->info('Notifications seeded with correct user relationships!');
     }
 }

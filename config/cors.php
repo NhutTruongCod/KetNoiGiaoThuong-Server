@@ -16,11 +16,19 @@ return [
     */
 
     'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
+    
     'allowed_methods' => ['*'],
-    'allowed_origins' => ['http://127.0.0.1:5173','http://localhost:5173'],
+    
+    'allowed_origins' => ['*'], // Allow all origins in development
+    
+    'allowed_origins_patterns' => [],
+    
     'allowed_headers' => ['*'],
-    'exposed_headers' => [],
-    'max_age' => 0,
+    
+    'exposed_headers' => ['Authorization', 'X-Request-ID', 'X-Correlation-ID'],
+    
+    'max_age' => 86400, // 24 hours
+    
     'supports_credentials' => true,
     // 'paths' => ['api/*', 'sanctum/csrf-cookie'],
 

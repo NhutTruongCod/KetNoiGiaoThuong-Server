@@ -146,15 +146,39 @@ class AuctionController extends BaseApiController
                 'starting_price' => 'required|numeric|min:0',
                 'reserve_price' => 'nullable|numeric|min:0',
                 'bid_increment' => 'required|numeric|min:1000',
-                'start_time' => 'required|date|after:now',
+                'start_time' => 'required|date',
                 'end_time' => 'required|date|after:start_time',
                 'auto_extend' => 'nullable|boolean',
                 'extend_minutes' => 'nullable|integer|min:1|max:60',
                 'max_bids_per_user' => 'nullable|integer|min:0',
+            ], [
+                'listing_id.required' => 'Vui lòng chọn sản phẩm đấu giá',
+                'listing_id.exists' => 'Sản phẩm không tồn tại',
+                'starting_price.required' => 'Vui lòng nhập giá khởi điểm',
+                'starting_price.min' => 'Giá khởi điểm phải >= 0',
+                'bid_increment.required' => 'Vui lòng chọn bước giá',
+                'bid_increment.min' => 'Bước giá phải >= 1,000 VND',
+                'start_time.required' => 'Vui lòng chọn thời gian bắt đầu',
+                'start_time.date' => 'Thời gian bắt đầu không hợp lệ',
+                'end_time.required' => 'Vui lòng chọn thời gian kết thúc',
+                'end_time.date' => 'Thời gian kết thúc không hợp lệ',
+                'end_time.after' => 'Thời gian kết thúc phải sau thời gian bắt đầu',
             ]);
 
             if ($validator->fails()) {
-                return $this->fail(['errors' => $validator->errors()], 400);
+                return $this->fail([
+                    'message' => 'Dữ liệu không hợp lệ',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            
+            // Kiểm tra start_time phải trong tương lai (cho phép 5 phút trước)
+            $startTime = \Carbon\Carbon::parse($request->start_time);
+            if ($startTime->lt(now()->subMinutes(5))) {
+                return $this->fail([
+                    'message' => 'Thời gian bắt đầu phải trong tương lai',
+                    'errors' => ['start_time' => ['Thời gian bắt đầu phải trong tương lai']]
+                ], 422);
             }
 
             // Kiểm tra listing thuộc về user
@@ -285,6 +309,9 @@ class AuctionController extends BaseApiController
     /**
      * POST /api/auctions/{auction}/bids
      * Đặt giá trong phiên đấu giá
+     * 
+     * @param amount - Số tiền VND (không phải cents)
+     *                 VD: 100000000 = 100 triệu VND
      */
     public function placeBid(Request $request, Auction $auction)
     {
@@ -292,23 +319,49 @@ class AuctionController extends BaseApiController
             $user = $request->user();
 
             $validator = Validator::make($request->all(), [
-                'amount' => 'required|numeric|min:0',
+                'amount' => 'required|numeric|min:1000',
+            ], [
+                'amount.required' => 'Vui lòng nhập số tiền đặt giá',
+                'amount.numeric' => 'Số tiền phải là số',
+                'amount.min' => 'Số tiền tối thiểu là 1,000 VND',
             ]);
 
             if ($validator->fails()) {
-                return $this->fail(['errors' => $validator->errors()], 400);
+                return $this->fail([
+                    'message' => 'Dữ liệu không hợp lệ',
+                    'errors' => $validator->errors()
+                ], 422);
             }
 
-            $amountCents = $request->amount * 100;
+            // amount là VND, chuyển sang cents
+            $amountCents = (int) round($request->amount * 100);
+
+            // Debug info
+            \Log::info('PlaceBid Debug', [
+                'auction_id' => $auction->id,
+                'user_id' => $user->id,
+                'input_amount' => $request->amount,
+                'amount_cents' => $amountCents,
+                'current_price_cents' => $auction->current_price_cents,
+                'bid_increment_cents' => $auction->bid_increment_cents,
+                'minimum_bid_cents' => $auction->getMinimumBid(),
+            ]);
 
             // Kiểm tra không cho seller tự đặt giá auction mình
             if ($auction->created_by === $user->id) {
-                return $this->fail(['message' => 'Bạn không thể đặt giá cho phiên đấu giá của chính mình'], 403);
+                return $this->fail([
+                    'message' => 'Bạn không thể đặt giá cho phiên đấu giá của chính mình'
+                ], 403);
             }
 
             // Kiểm tra trạng thái
             if (!$auction->canBid()) {
-                return $this->fail(['message' => 'Phiên đấu giá không hoạt động hoặc đã kết thúc'], 422);
+                return $this->fail([
+                    'message' => 'Phiên đấu giá không hoạt động hoặc đã kết thúc',
+                    'status' => $auction->status,
+                    'starts_at' => $auction->starts_at,
+                    'ends_at' => $auction->ends_at,
+                ], 422);
             }
 
             // Kiểm tra giá tối thiểu
@@ -316,9 +369,12 @@ class AuctionController extends BaseApiController
             if ($amountCents < $minimumBid) {
                 return $this->fail([
                     'message' => 'Giá đặt phải ít nhất ' . number_format($minimumBid / 100, 0, ',', '.') . ' VND',
+                    'your_bid' => $request->amount,
+                    'your_bid_cents' => $amountCents,
                     'current_price' => $auction->current_price_cents / 100,
                     'bid_increment' => $auction->bid_increment_cents / 100,
                     'minimum_bid' => $minimumBid / 100,
+                    'hint' => 'Gửi amount là số VND (không phải cents). VD: 100000000 = 100 triệu VND'
                 ], 422);
             }
 
@@ -356,30 +412,45 @@ class AuctionController extends BaseApiController
             // Check and extend if needed
             $extended = $auction->extendIfNeeded($bid);
 
-            // Send notifications
-            // 1. Notify previous highest bidder (if exists)
-            $previousHighestBid = AuctionBid::where('auction_id', $auction->id)
-                ->where('user_id', '!=', $user->id)
-                ->where('is_winning', false)
-                ->orderBy('amount_cents', 'desc')
-                ->first();
+            // Send notifications (wrap in try-catch to not fail the bid)
+            try {
+                // Load listing relationship if not loaded
+                if (!$auction->relationLoaded('listing')) {
+                    $auction->load('listing');
+                }
+                
+                $listingTitle = $auction->listing ? $auction->listing->title : 'Sản phẩm đấu giá';
+                
+                // 1. Notify previous highest bidder (if exists)
+                $previousHighestBid = AuctionBid::where('auction_id', $auction->id)
+                    ->where('user_id', '!=', $user->id)
+                    ->where('is_winning', false)
+                    ->orderBy('amount_cents', 'desc')
+                    ->first();
 
-            if ($previousHighestBid) {
+                if ($previousHighestBid) {
+                    Notification::create([
+                        'user_id' => $previousHighestBid->user_id,
+                        'title' => 'Bạn đã bị vượt giá',
+                        'message' => "Giá đặt của bạn trong phiên đấu giá \"{$listingTitle}\" đã bị vượt qua.",
+                        'type' => 'auction',
+                    ]);
+                }
+
+                // 2. Notify seller
                 Notification::create([
-                    'user_id' => $previousHighestBid->user_id,
-                    'title' => 'Bạn đã bị vượt giá',
-                    'message' => "Giá đặt của bạn trong phiên đấu giá \"{$auction->listing->title}\" đã bị vượt qua.",
+                    'user_id' => $auction->created_by,
+                    'title' => 'Có giá mới trong đấu giá',
+                    'message' => "Có người đặt giá " . number_format($amountCents / 100, 0, ',', '.') . " VND cho phiên đấu giá \"{$listingTitle}\".",
                     'type' => 'auction',
                 ]);
+            } catch (\Exception $notifyError) {
+                // Log notification error but don't fail the bid
+                \Log::warning('Failed to send auction notification', [
+                    'auction_id' => $auction->id,
+                    'error' => $notifyError->getMessage()
+                ]);
             }
-
-            // 2. Notify seller
-            Notification::create([
-                'user_id' => $auction->created_by,
-                'title' => 'Có giá mới trong đấu giá',
-                'message' => "Có người đặt giá " . number_format($amountCents / 100, 0, ',', '.') . " VND cho phiên đấu giá \"{$auction->listing->title}\".",
-                'type' => 'auction',
-            ]);
 
             DB::commit();
 

@@ -21,8 +21,8 @@ class AnalyticsSeeder extends Seeder
 
     private function seedPageViews()
     {
-        $shops = Shop::limit(5)->get();
-        $listings = Listing::limit(20)->get();
+        $shops = Shop::all();
+        $listings = Listing::all();
         $userIds = DB::table('users')->pluck('id')->toArray();
         
         if ($shops->isEmpty() || $listings->isEmpty()) {
@@ -33,28 +33,33 @@ class AnalyticsSeeder extends Seeder
         $pageViews = [];
         $startDate = Carbon::now()->subDays(30);
 
-        for ($i = 0; $i < 500; $i++) {
-            $shop = $shops->random();
-            $listing = $listings->random();
-            $date = $startDate->copy()->addDays(rand(0, 30));
+        // Tạo page views cho TẤT CẢ listings
+        foreach ($listings as $listing) {
+            // Mỗi listing có 20-50 lượt xem
+            $viewCount = rand(20, 50);
+            
+            for ($i = 0; $i < $viewCount; $i++) {
+                $date = $startDate->copy()->addDays(rand(0, 30));
 
-            $pageViews[] = [
-                'company_id' => $shop->id,
-                'user_id' => (rand(0, 10) > 3 && !empty($userIds)) ? $userIds[array_rand($userIds)] : null,
-                'session_id' => uniqid('sess_'),
-                'path' => '/listings/' . $listing->id,
-                'referrer' => $this->getRandomReferrer(),
-                'user_agent' => $this->getRandomUserAgent(),
-                'request_id' => uniqid('req_'),
-                'correlation_id' => uniqid('corr_'),
-                'duration_ms' => rand(5000, 120000),
-                'created_at' => $date,
-                'updated_at' => $date,
-            ];
+                $pageViews[] = [
+                    'company_id' => $listing->shop_id,
+                    'listing_id' => $listing->id,
+                    'user_id' => (rand(0, 10) > 3 && !empty($userIds)) ? $userIds[array_rand($userIds)] : null,
+                    'session_id' => uniqid('sess_'),
+                    'path' => '/listings/' . $listing->id,
+                    'referrer' => $this->getRandomReferrer(),
+                    'user_agent' => $this->getRandomUserAgent(),
+                    'request_id' => uniqid('req_'),
+                    'correlation_id' => uniqid('corr_'),
+                    'duration_ms' => rand(5000, 120000),
+                    'created_at' => $date,
+                    'updated_at' => $date,
+                ];
+            }
         }
 
         DB::table('page_views')->insert($pageViews);
-        $this->command->info('Created ' . count($pageViews) . ' page views');
+        $this->command->info('Created ' . count($pageViews) . ' page views for ' . $listings->count() . ' listings');
     }
 
     private function seedAnalyticsEvents()

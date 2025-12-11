@@ -40,7 +40,22 @@ class Listing extends Model
         'meta' => 'array',
         'total_reviews' => 'integer',
         'rating' => 'decimal:2',
+        'price_cents' => 'integer',
     ];
+
+    /**
+     * Thêm price vào response JSON để FE dễ sử dụng
+     */
+    protected $appends = ['price', 'main_image'];
+
+    /**
+     * Accessor: Chuyển đổi price_cents sang VND
+     * FE có thể dùng listing.price thay vì listing.price_cents / 100
+     */
+    public function getPriceAttribute()
+    {
+        return ($this->price_cents ?? 0) / 100;
+    }
 
     /**
      * Scope active listings

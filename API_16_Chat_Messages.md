@@ -192,50 +192,66 @@ Authorization: Bearer {{token}}
 **Body → raw → JSON:**
 ```json
 {
-  "receiver_id": 5,
-  "message": "Xin chào, sản phẩm của bạn còn hàng không?",
-  "listing_id": 123,
-  "attachments": [
-    "https://example.com/uploads/image1.jpg"
-  ]
+  "to_user_id": 5,
+  "body": "Xin chào, sản phẩm của bạn còn hàng không?",
+  "listing_id": 123
 }
 ```
 
+### ⚠️ QUAN TRỌNG - Tên field chính xác:
+
+| Field | Tên đúng | Tên SAI (gây lỗi 422) |
+|-------|----------|----------------------|
+| ID người nhận | `to_user_id` | ~~receiver_id~~ |
+| Nội dung tin nhắn | `body` | ~~message~~ |
+| ID sản phẩm | `listing_id` | ✅ |
+
 **Required fields:**
-- `receiver_id` - ID người nhận
-- `message` - Nội dung tin nhắn
+- `to_user_id` - ID người nhận (integer, phải tồn tại trong bảng users)
+- `body` - Nội dung tin nhắn (string, max 2000 ký tự)
 
 **Optional fields:**
-- `listing_id` - ID tin đăng (nếu chat về sản phẩm)
-- `attachments` - File đính kèm (array URLs)
+- `listing_id` - ID tin đăng nếu chat về sản phẩm (integer)
 
 ### Response mẫu
 
 **Success (201):**
 ```json
 {
-  "message": "Message sent successfully",
   "data": {
     "id": 101,
-    "sender_id": 2,
-    "receiver_id": 5,
-    "message": "Xin chào, sản phẩm của bạn còn hàng không?",
+    "from_user_id": 2,
+    "to_user_id": 5,
+    "body": "Xin chào, sản phẩm của bạn còn hàng không?",
     "listing_id": 123,
-    "attachments": [
-      "https://example.com/uploads/image1.jpg"
-    ],
     "is_read": false,
-    "created_at": "2025-12-01T15:00:00.000000Z"
+    "created_at": "2025-12-01T15:00:00.000000Z",
+    "from_user": {
+      "id": 2,
+      "full_name": "Nguyễn Văn A"
+    },
+    "to_user": {
+      "id": 5,
+      "full_name": "Shop ABC"
+    }
   }
 }
 ```
 
-**Error - Không thể nhắn tin cho chính mình (400):**
+**Error - Validation Failed (422):**
 ```json
 {
-  "message": "You cannot send message to yourself"
+  "message": "The to user id field is required.",
+  "errors": {
+    "to_user_id": ["The to user id field is required."],
+    "body": ["The body field is required."]
+  }
 }
 ```
+
+**Lỗi thường gặp:**
+- Dùng `receiver_id` thay vì `to_user_id` → Lỗi 422
+- Dùng `message` thay vì `body` → Lỗi 422
 
 ---
 

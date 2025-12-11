@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\SubscriptionPlan;
 use App\Models\UserSubscription;
 use App\Models\Notification;
+use App\Models\User;
+use App\Models\PlatformRevenue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SubscriptionController extends Controller
@@ -332,16 +335,290 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Generate payment URL (mock)
+     * 6. GET /subscriptions/plans - Danh sách gói
+     */
+    public function plans(Request $request)
+    {
+        $plans = SubscriptionPlan::active()
+            ->orderBy('sort_order')
+            ->get()
+            ->map(function ($plan) {
+                return [
+                    'id' => $plan->id,
+                    'name' => $plan->name,
+                    'slug' => $plan->slug,
+                    'description' => $plan->description,
+                    'price' => $plan->price,
+                    'currency' => $plan->currency,
+                    'duration_days' => $plan->duration_days,
+                    'commission_rate' => $plan->commission_rate,
+                    'search_boost' => $plan->search_boost,
+                    'free_promotions' => $plan->free_promotions,
+                    'badge' => $plan->badge,
+                    'features' => $plan->features,
+                    'benefits' => $plan->benefits,
+                    'is_popular' => $plan->is_popular,
+                    'pricing' => [
+                        '1_month' => $plan->calculatePrice(1),
+                        '3_months' => $plan->calculatePrice(3),
+                        '6_months' => $plan->calculatePrice(6),
+                        '12_months' => $plan->calculatePrice(12),
+                    ],
+                ];
+            });
+
+        return response()->json([
+            'data' => $plans
+        ]);
+    }
+
+    /**
+     * 7. POST /subscriptions/{id}/confirm-transfer - User xác nhận đã chuyển khoản
+     */
+    public function confirmTransfer(Request $request, $id)
+    {
+        $user = $request->user('api');
+
+        $subscription = UserSubscription::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->find($id);
+
+        if (!$subscription) {
+            return response()->json([
+                'message' => 'Subscription not found or already processed'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'payment_proof' => 'nullable|string|max:500', // URL ảnh chứng từ
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $subscription->update([
+            'status' => 'processing',
+            'payment_proof' => $request->payment_proof,
+        ]);
+
+        // Notify admins
+        $admins = User::where('role', 'admin')->pluck('id');
+        foreach ($admins as $adminId) {
+            Notification::create([
+                'user_id' => $adminId,
+                'type' => 'system',
+                'title' => 'Yêu cầu duyệt gói đăng ký',
+                'message' => "{$user->full_name} đã xác nhận chuyển khoản cho gói {$subscription->plan->name}. Mã: {$subscription->payment_code}",
+                'data' => ['subscription_id' => $subscription->id],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Đã xác nhận chuyển khoản. Vui lòng chờ admin duyệt.',
+            'data' => $subscription->fresh(['plan'])
+        ]);
+    }
+
+    /**
+     * 8. GET /admin/subscriptions - Admin xem danh sách đăng ký
+     */
+    public function adminList(Request $request)
+    {
+        $query = UserSubscription::with(['user:id,full_name,email', 'plan:id,name,price,badge']);
+
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+
+        $subscriptions = $query->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 20));
+
+        return response()->json([
+            'data' => $subscriptions->items(),
+            'meta' => [
+                'current_page' => $subscriptions->currentPage(),
+                'per_page' => $subscriptions->perPage(),
+                'total' => $subscriptions->total(),
+                'last_page' => $subscriptions->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * 9. PUT /admin/subscriptions/{id}/approve - Admin duyệt đăng ký
+     */
+    public function adminApprove(Request $request, $id)
+    {
+        $admin = $request->user('api');
+
+        $subscription = UserSubscription::with(['user', 'plan'])->find($id);
+
+        if (!$subscription) {
+            return response()->json(['message' => 'Subscription not found'], 404);
+        }
+
+        if (!in_array($subscription->status, ['pending', 'processing'])) {
+            return response()->json(['message' => 'Subscription already processed'], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Activate subscription
+            $subscription->update([
+                'status' => 'active',
+                'is_active' => true,
+                'approved_by' => $admin->id,
+                'approved_at' => now(),
+                'admin_note' => $request->admin_note,
+            ]);
+
+            // Update user's subscription
+            $subscription->user->update([
+                'subscription_plan_id' => $subscription->plan_id,
+                'subscription_expires_at' => $subscription->expires_at,
+            ]);
+
+            // Record platform revenue
+            if ($subscription->final_amount > 0) {
+                PlatformRevenue::record(
+                    PlatformRevenue::TYPE_SUBSCRIPTION_FEE,
+                    $subscription->final_amount,
+                    'user_subscription',
+                    $subscription->id,
+                    $subscription->user_id,
+                    "Gói {$subscription->plan->name} - {$subscription->duration_months} tháng"
+                );
+            }
+
+            // Notify user
+            Notification::create([
+                'user_id' => $subscription->user_id,
+                'type' => 'system',
+                'title' => 'Gói đăng ký đã được kích hoạt',
+                'message' => "Gói {$subscription->plan->name} của bạn đã được kích hoạt. Hết hạn: " . $subscription->end_date->format('d/m/Y'),
+                'data' => ['subscription_id' => $subscription->id],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Đã duyệt và kích hoạt gói đăng ký',
+                'data' => $subscription->fresh(['user', 'plan'])
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 10. PUT /admin/subscriptions/{id}/reject - Admin từ chối đăng ký
+     */
+    public function adminReject(Request $request, $id)
+    {
+        $admin = $request->user('api');
+
+        $subscription = UserSubscription::with(['user', 'plan'])->find($id);
+
+        if (!$subscription) {
+            return response()->json(['message' => 'Subscription not found'], 404);
+        }
+
+        if (!in_array($subscription->status, ['pending', 'processing'])) {
+            return response()->json(['message' => 'Subscription already processed'], 400);
+        }
+
+        $subscription->update([
+            'status' => 'rejected',
+            'is_active' => false,
+            'approved_by' => $admin->id,
+            'approved_at' => now(),
+            'admin_note' => $request->admin_note ?? 'Không xác nhận được giao dịch',
+        ]);
+
+        // Notify user
+        Notification::create([
+            'user_id' => $subscription->user_id,
+            'type' => 'system',
+            'title' => 'Gói đăng ký bị từ chối',
+            'message' => "Yêu cầu đăng ký gói {$subscription->plan->name} bị từ chối. " . ($request->admin_note ? "Lý do: {$request->admin_note}" : ''),
+            'data' => ['subscription_id' => $subscription->id],
+        ]);
+
+        return response()->json([
+            'message' => 'Đã từ chối yêu cầu đăng ký',
+            'data' => $subscription->fresh()
+        ]);
+    }
+
+    /**
+     * 11. GET /admin/subscriptions/stats - Thống kê gói đăng ký
+     */
+    public function adminStats(Request $request)
+    {
+        $thisMonth = now()->startOfMonth();
+
+        return response()->json([
+            'data' => [
+                'total_subscriptions' => UserSubscription::count(),
+                'active_subscriptions' => UserSubscription::where('status', 'active')->count(),
+                'pending_subscriptions' => UserSubscription::whereIn('status', ['pending', 'processing'])->count(),
+                'month_revenue' => UserSubscription::where('status', 'active')
+                    ->where('approved_at', '>=', $thisMonth)
+                    ->sum('final_amount'),
+                'total_revenue' => UserSubscription::where('status', 'active')->sum('final_amount'),
+                'by_plan' => SubscriptionPlan::withCount(['subscriptions as active_count' => function ($q) {
+                    $q->where('status', 'active');
+                }])->get(['id', 'name', 'price', 'badge']),
+            ]
+        ]);
+    }
+
+    /**
+     * Generate payment URL with QR code
      */
     private function generatePaymentUrl($subscription, $paymentMethod)
     {
-        // TODO: Implement real payment gateway integration
-        
+        if ($paymentMethod === 'bank_transfer') {
+            // Generate payment code
+            $paymentCode = 'SUB' . time() . rand(1000, 9999);
+            $subscription->update(['payment_code' => $paymentCode]);
+
+            // Bank config
+            $bankConfig = [
+                'bank_code' => 'VCB',
+                'bank_name' => 'Vietcombank',
+                'account_number' => '1234567890',
+                'account_holder' => 'CONG TY TNHH TRADEHUB',
+            ];
+
+            $transferContent = 'GOITV ' . $paymentCode;
+            $amount = $subscription->final_amount;
+            $accountName = urlencode($bankConfig['account_holder']);
+            $encodedContent = urlencode($transferContent);
+
+            $qrUrl = "https://img.vietqr.io/image/{$bankConfig['bank_code']}-{$bankConfig['account_number']}-compact2.png?amount={$amount}&addInfo={$encodedContent}&accountName={$accountName}";
+
+            return [
+                'type' => 'bank_transfer',
+                'qr_url' => $qrUrl,
+                'bank_name' => $bankConfig['bank_name'],
+                'bank_code' => $bankConfig['bank_code'],
+                'account_number' => $bankConfig['account_number'],
+                'account_holder' => $bankConfig['account_holder'],
+                'transfer_content' => $transferContent,
+                'amount' => $amount,
+            ];
+        }
+
+        // Other payment methods (mock)
         $baseUrls = [
             'vnpay' => 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
             'momo' => 'https://test-payment.momo.vn/gw_payment/transactionProcessor',
-            'bank_transfer' => null,
         ];
 
         $baseUrl = $baseUrls[$paymentMethod] ?? null;
@@ -350,9 +627,11 @@ class SubscriptionController extends Controller
             return null;
         }
 
-        // Mock payment URL with basic params
-        return $baseUrl . '?amount=' . ($subscription->final_amount * 100) 
-            . '&orderInfo=Subscription-' . $subscription->id
-            . '&returnUrl=' . url('/api/subscriptions/payment/callback');
+        return [
+            'type' => $paymentMethod,
+            'url' => $baseUrl . '?amount=' . ($subscription->final_amount * 100)
+                . '&orderInfo=Subscription-' . $subscription->id
+                . '&returnUrl=' . url('/api/subscriptions/payment/callback'),
+        ];
     }
 }

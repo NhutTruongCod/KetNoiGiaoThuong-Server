@@ -76,6 +76,11 @@ class Auction extends Model
         return $this->hasOne(AuctionBid::class)->where('is_winning', true);
     }
 
+    public function auctionPayment()
+    {
+        return $this->hasOne(AuctionPayment::class);
+    }
+
     /**
      * Accessors
      */
@@ -135,7 +140,32 @@ class Auction extends Model
 
     public function canBid(): bool
     {
-        return $this->isActive() && !$this->isEnded();
+        $now = now();
+        
+        // Có thể bid nếu:
+        // 1. Thời gian hiện tại >= starts_at
+        // 2. Thời gian hiện tại <= ends_at
+        // 3. Status không phải 'cancelled' hoặc 'ended'
+        
+        if ($this->status === 'cancelled' || $this->status === 'ended') {
+            return false;
+        }
+        
+        if ($now < $this->starts_at) {
+            return false; // Chưa bắt đầu
+        }
+        
+        if ($now > $this->ends_at) {
+            return false; // Đã kết thúc
+        }
+        
+        // Auto-update status to active if needed
+        if ($this->status === 'upcoming' && $now >= $this->starts_at) {
+            $this->status = 'active';
+            $this->save();
+        }
+        
+        return true;
     }
 
     public function canUpdate(): bool

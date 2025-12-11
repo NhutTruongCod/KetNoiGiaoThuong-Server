@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Models\Listing;
 
 class ListingRequest extends FormRequest
 {
@@ -15,9 +16,28 @@ class ListingRequest extends FormRequest
     public function rules(): array
     {
         $listingId = $this->route('listing') ? $this->route('listing')->id : null;
+        $userId = $this->user()?->id;
 
         return [
-            'title' => 'required|string|max:255',
+            'title' => [
+                'required',
+                'string',
+                'max:255',
+                // Kiểm tra trùng title trong cùng user (không cho đăng bài trùng tên)
+                function ($attribute, $value, $fail) use ($listingId, $userId) {
+                    $query = Listing::where('user_id', $userId)
+                        ->where('title', $value);
+                    
+                    // Nếu đang update, loại trừ listing hiện tại
+                    if ($listingId) {
+                        $query->where('id', '!=', $listingId);
+                    }
+                    
+                    if ($query->exists()) {
+                        $fail('Bạn đã có bài đăng với tiêu đề này. Vui lòng chọn tiêu đề khác.');
+                    }
+                },
+            ],
             'slug' => 'nullable|string|max:255|unique:listings,slug,' . $listingId,
             'description' => 'nullable|string|max:5000',
             'category' => 'nullable|string|max:100',

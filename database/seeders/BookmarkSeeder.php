@@ -12,7 +12,7 @@ class BookmarkSeeder extends Seeder
     public function run(): void
     {
         $buyers = User::where('role', 'buyer')->get();
-        $listings = Listing::take(5)->get();
+        $listings = Listing::all(); // Lấy TẤT CẢ listings
 
         if ($buyers->count() === 0 || $listings->count() === 0) {
             $this->command->warn('  No buyers or listings found. Skipping bookmark seeder.');
@@ -20,9 +20,10 @@ class BookmarkSeeder extends Seeder
         }
 
         $count = 0;
+        
+        // Mỗi buyer bookmark 3-6 listings
         foreach ($buyers as $buyer) {
-            // Mỗi buyer bookmark 2-3 listings
-            $bookmarkCount = rand(2, 3);
+            $bookmarkCount = rand(3, 6);
             $randomListings = $listings->random(min($bookmarkCount, $listings->count()));
 
             foreach ($randomListings as $listing) {
@@ -33,7 +34,21 @@ class BookmarkSeeder extends Seeder
                 $count++;
             }
         }
+        
+        // Thêm: Mỗi listing được bookmark bởi 1-3 buyers ngẫu nhiên
+        foreach ($listings as $listing) {
+            $bookmarkByCount = rand(1, 3);
+            $randomBuyers = $buyers->random(min($bookmarkByCount, $buyers->count()));
+            
+            foreach ($randomBuyers as $buyer) {
+                Bookmark::firstOrCreate([
+                    'user_id' => $buyer->id,
+                    'listing_id' => $listing->id,
+                ]);
+                $count++;
+            }
+        }
 
-        $this->command->info(' Created ' . $count . ' bookmarks');
+        $this->command->info(' Created ' . $count . ' bookmarks for ' . $listings->count() . ' listings');
     }
 }

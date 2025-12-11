@@ -15,5 +15,20 @@ class TrimStrings extends Middleware
         'current_password',
         'password',
         'password_confirmation',
+        'avatar', // Don't trim file uploads
     ];
+
+    /**
+     * Handle an incoming request.
+     */
+    public function handle($request, \Closure $next)
+    {
+        // Skip trimming for file upload requests
+        if ($request->hasHeader('Content-Type') && 
+            str_contains($request->header('Content-Type'), 'multipart/form-data')) {
+            return $next($request);
+        }
+
+        return parent::handle($request, $next);
+    }
 }

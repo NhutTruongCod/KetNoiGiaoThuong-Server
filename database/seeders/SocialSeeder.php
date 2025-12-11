@@ -13,7 +13,7 @@ class SocialSeeder extends Seeder
     public function run(): void
     {
         $users = User::all();
-        $listings = Listing::take(10)->get();
+        $listings = Listing::all(); // Lấy TẤT CẢ listings
 
         if ($users->count() === 0 || $listings->count() === 0) {
             $this->command->warn('⚠️  No users or listings found. Skipping social seeder.');
@@ -23,10 +23,10 @@ class SocialSeeder extends Seeder
         $likesCount = 0;
         $commentsCount = 0;
 
-        // Create likes
+        // Create likes cho TẤT CẢ listings
         foreach ($listings as $listing) {
-            // Random 3-8 users like each listing
-            $likeCount = rand(3, 8);
+            // Random 5-12 users like each listing
+            $likeCount = rand(5, 12);
             $randomUsers = $users->random(min($likeCount, $users->count()));
 
             foreach ($randomUsers as $user) {
@@ -38,7 +38,7 @@ class SocialSeeder extends Seeder
             }
         }
 
-        // Create comments
+        // Create comments cho TẤT CẢ listings
         $comments = [
             'Sản phẩm này có bảo hành không shop?',
             'Còn hàng không ạ?',
@@ -50,11 +50,16 @@ class SocialSeeder extends Seeder
             'Sản phẩm này có giảm giá không?',
             'Mình muốn mua 2 cái, có giảm không?',
             'Shop ơi, inbox mình với!',
+            'Chất lượng sản phẩm thế nào shop?',
+            'Có ship COD không ạ?',
+            'Sản phẩm này còn hàng không shop?',
+            'Mình ở Hà Nội, bao lâu nhận được hàng?',
+            'Có thể xem hàng trước khi mua không?',
         ];
 
         foreach ($listings as $listing) {
-            // Random 2-5 comments per listing
-            $commentCount = rand(2, 5);
+            // Random 3-8 comments per listing
+            $commentCount = rand(3, 8);
 
             for ($i = 0; $i < $commentCount; $i++) {
                 $randomUser = $users->random();
@@ -70,6 +75,6 @@ class SocialSeeder extends Seeder
             }
         }
 
-        $this->command->info('✅ Created ' . $likesCount . ' likes and ' . $commentsCount . ' comments');
+        $this->command->info('✅ Created ' . $likesCount . ' likes and ' . $commentsCount . ' comments for ' . $listings->count() . ' listings');
     }
 }

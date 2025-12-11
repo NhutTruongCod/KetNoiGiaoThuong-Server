@@ -323,12 +323,28 @@ Authorization: Bearer {{token}}
 **Body → raw → JSON:**
 ```json
 {
-  "amount": 15500000
+  "amount": 100000
 }
 ```
 
+### ⚠️ QUAN TRỌNG - Format số tiền:
+- `amount` là số tiền **VND** (KHÔNG phải cents)
+- Ví dụ: `100000` = 100,000 VND (một trăm nghìn)
+- **KHÔNG** nhân 100 khi gửi
+- Backend lưu trữ dạng cents nhưng FE gửi VND
+
+### Cách tính giá tối thiểu:
+```
+minimum_bid = (current_price_cents + bid_increment_cents) / 100
+
+Ví dụ:
+- current_price_cents = 9590234 → 95,902.34 VND
+- bid_increment_cents = 360393 → 3,603.93 VND  
+- minimum_bid = ceil(95902.34 + 3603.93) = 99,507 VND
+```
+
 **Required fields:**
-- `amount` - Số tiền đặt giá (phải >= current_price + bid_increment)
+- `amount` - Số tiền VND (phải >= minimum_bid)
 
 ### Response mẫu
 
