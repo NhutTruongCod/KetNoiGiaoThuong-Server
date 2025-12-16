@@ -256,6 +256,72 @@ class AdminController extends BaseApiController
         }
     }
 
+    /**
+     * PUT /api/admin/promotions/{id}/approve
+     * Admin duyệt quảng cáo
+     */
+    public function approvePromotion(Request $request, $id)
+    {
+        try {
+            $promotion = Promotion::findOrFail($id);
+            
+            if ($promotion->status !== 'pending') {
+                return $this->fail(['message' => 'Chỉ có thể duyệt quảng cáo đang chờ duyệt'], 400);
+            }
+            
+            // Tính featured_position: lấy position tiếp theo cho loại promotion này
+            $maxPosition = Promotion::where('status', 'active')
+                ->where('type', $promotion->type)
+                ->max('featured_position') ?? 0;
+            
+            $promotion->update([
+                'status' => 'active',
+                'start_date' => now()->toDateString(),
+                'end_date' => now()->addDays($promotion->duration_days)->toDateString(),
+                'featured_position' => $maxPosition + 1, // Gán vị trí ưu tiên
+            ]);
+            
+            return $this->ok([
+                'message' => 'Đã duyệt quảng cáo thành công',
+                'promotion' => $promotion->fresh()->load(['listing:id,title,images', 'shop:id,name']),
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->fail(['message' => 'Không tìm thấy quảng cáo'], 404);
+        } catch (\Exception $e) {
+            return $this->fail(['message' => 'Lỗi server', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * PUT /api/admin/promotions/{id}/reject
+     * Admin từ chối quảng cáo
+     */
+    public function rejectPromotion(Request $request, $id)
+    {
+        try {
+            $promotion = Promotion::findOrFail($id);
+            
+            if ($promotion->status !== 'pending') {
+                return $this->fail(['message' => 'Chỉ có thể từ chối quảng cáo đang chờ duyệt'], 400);
+            }
+            
+            $promotion->update([
+                'status' => 'cancelled',
+                'refund_amount' => $promotion->budget, // Hoàn lại toàn bộ ngân sách
+                'refund_note' => $request->input('reason', 'Quảng cáo bị từ chối bởi admin'),
+            ]);
+            
+            return $this->ok([
+                'message' => 'Đã từ chối quảng cáo',
+                'promotion' => $promotion->fresh()->load(['listing:id,title,images', 'shop:id,name']),
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->fail(['message' => 'Không tìm thấy quảng cáo'], 404);
+        } catch (\Exception $e) {
+            return $this->fail(['message' => 'Lỗi server', 'error' => $e->getMessage()], 500);
+        }
+    }
+
     public function transactions(Request $request)
     {
         try {

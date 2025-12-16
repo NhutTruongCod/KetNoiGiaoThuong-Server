@@ -21,6 +21,9 @@ class PromotionSeeder extends Seeder
 
         $promotions = [];
         
+        // Tạo promotions với các loại cụ thể để test
+        $promotionTypes = ['top_search', 'top_search', 'featured', 'homepage_banner', 'category_banner'];
+        
         foreach ($listings->take(5) as $index => $listing) {
             $startDate = Carbon::now()->subDays(rand(1, 5));
             $durationDays = rand(7, 30);
@@ -33,7 +36,7 @@ class PromotionSeeder extends Seeder
             $promotions[] = [
                 'shop_id' => $listing->shop_id,
                 'listing_id' => $listing->id,
-                'type' => ['featured', 'top_search', 'homepage_banner', 'category_banner'][rand(0, 3)],
+                'type' => $promotionTypes[$index], // Đảm bảo có ít nhất 2 top_search
                 'duration_days' => $durationDays,
                 'budget' => $budget,
                 'spent' => $spent,

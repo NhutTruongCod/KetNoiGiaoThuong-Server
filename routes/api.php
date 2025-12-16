@@ -153,8 +153,16 @@ Route::prefix('orders')->middleware('auth:api')->group(function () {
     Route::get('/', [OrderController::class, 'index']);           // Danh sách đơn hàng
     Route::post('/', [OrderController::class, 'store']);          // Tạo đơn hàng mới
     Route::get('/{id}', [OrderController::class, 'show']);        // Chi tiết đơn hàng
+    Route::get('/{id}/tracking', [OrderController::class, 'getTracking']); // Lấy thông tin tracking
     Route::post('/{id}/pay', [OrderController::class, 'payOrder']); // Thanh toán đơn hàng bằng ví
-    Route::post('/{id}/confirm-received', [OrderController::class, 'confirmReceived']); // Xác nhận nhận hàng
+    
+    // Shipping - Seller cập nhật vận chuyển
+    Route::put('/{id}/shipping', [OrderController::class, 'updateShipping']); // Cập nhật thông tin vận chuyển
+    Route::post('/{id}/mark-delivered', [OrderController::class, 'markDelivered']); // Đánh dấu đã giao hàng
+    
+    // Buyer xác nhận nhận hàng (YÊU CẦU CHỤP HÌNH)
+    Route::post('/{id}/confirm-received', [OrderController::class, 'confirmReceived']); // Xác nhận nhận hàng + upload ảnh
+    
     Route::post('/{id}/request-refund', [OrderController::class, 'requestRefund']); // Yêu cầu hoàn tiền
     Route::put('/{id}', [OrderController::class, 'update']);      // Cập nhật đơn hàng (seller)
     Route::delete('/{id}', [OrderController::class, 'destroy']);  // Hủy đơn hàng
@@ -287,6 +295,8 @@ Route::prefix('discovery')->group(function () {
     Route::get('search', [\App\Http\Controllers\Discovery\DiscoveryController::class, 'search']);
     Route::get('search-all', [\App\Http\Controllers\Discovery\DiscoveryController::class, 'searchAll']);
     Route::get('shops', [\App\Http\Controllers\Discovery\DiscoveryController::class, 'shops']);
+    Route::get('featured', [\App\Http\Controllers\Discovery\DiscoveryController::class, 'featured']);
+    Route::post('promotions/{id}/click', [\App\Http\Controllers\Discovery\DiscoveryController::class, 'trackClick']);
 });
 
 // Bookmarks (require auth)
@@ -394,6 +404,8 @@ Route::prefix('admin')->middleware(['auth:api', 'admin'])->group(function () {
     // Promotions/Ads Management
     Route::get('promotions', [\App\Http\Controllers\AdminController::class, 'promotions']);
     Route::get('promotions/stats', [\App\Http\Controllers\AdminController::class, 'promotionStats']);
+    Route::put('promotions/{id}/approve', [\App\Http\Controllers\AdminController::class, 'approvePromotion']);
+    Route::put('promotions/{id}/reject', [\App\Http\Controllers\AdminController::class, 'rejectPromotion']);
     
     // Transactions Management
     Route::get('transactions', [\App\Http\Controllers\AdminController::class, 'transactions']);

@@ -53,6 +53,22 @@ class Order extends Model
         'refund_processed_at',
         'refund_processed_by',
         'refund_admin_note',
+        // Shipping fields
+        'shipping_carrier',
+        'actual_shipping_fee',
+        'estimated_delivery_at',
+        'shipping_note',
+        // Buyer confirmation fields
+        'buyer_confirmed_at',
+        'delivery_confirmation_images',
+        'delivery_confirmation_note',
+        'delivery_condition',
+        // Shipping history
+        'shipping_history',
+        'shipper_name',
+        'shipper_phone',
+        'delivery_proof_images',
+        'auto_complete_at',
     ];
 
     protected $appends = ['has_review'];
@@ -71,6 +87,7 @@ class Order extends Model
         'platform_fee' => 'decimal:2',
         'seller_receive' => 'decimal:2',
         'final_amount' => 'decimal:2',
+        'actual_shipping_fee' => 'decimal:2',
         'chat_confirmed_at' => 'datetime',
         'paid_at' => 'datetime',
         'seller_received_at' => 'datetime',
@@ -80,6 +97,12 @@ class Order extends Model
         'refund_requested_at' => 'datetime',
         'refund_evidence' => 'array',
         'refund_processed_at' => 'datetime',
+        'estimated_delivery_at' => 'datetime',
+        'buyer_confirmed_at' => 'datetime',
+        'delivery_confirmation_images' => 'array',
+        'shipping_history' => 'array',
+        'delivery_proof_images' => 'array',
+        'auto_complete_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -232,5 +255,86 @@ class Order extends Model
     {
         $this->final_amount = $this->total_amount + $this->shipping_fee + $this->tax_amount - $this->discount_amount;
         return $this->final_amount;
+    }
+    
+    /**
+     * Kiểm tra có thể cập nhật vận chuyển không
+     */
+    public function canUpdateShipping()
+    {
+        return in_array($this->status, ['confirmed', 'processing']);
+    }
+    
+    /**
+     * Kiểm tra có thể xác nhận nhận hàng không
+     */
+    public function canConfirmReceived()
+    {
+        return in_array($this->status, ['shipping', 'delivered']);
+    }
+    
+    /**
+     * Kiểm tra đơn hàng đang chờ xác nhận nhận hàng
+     */
+    public function isWaitingBuyerConfirmation()
+    {
+        return $this->status === 'delivered' && !$this->buyer_confirmed_at;
+    }
+    
+    /**
+     * Lấy trạng thái hiển thị tiếng Việt
+     */
+    public function getStatusLabelAttribute()
+    {
+        $labels = [
+            'pending' => 'Chờ thanh toán',
+            'confirmed' => 'Đã xác nhận',
+            'processing' => 'Đang chuẩn bị',
+            'shipping' => 'Đang giao',
+            'delivered' => 'Đã giao',
+            'completed' => 'Hoàn thành',
+            'cancelled' => 'Đã hủy',
+            'refunded' => 'Đã hoàn tiền',
+        ];
+        
+        return $labels[$this->status] ?? $this->status;
+    }
+    
+    /**
+     * Lấy tên đơn vị vận chuyển
+     */
+    public function getShippingCarrierNameAttribute()
+    {
+        $carriers = [
+            'ghn' => 'Giao Hàng Nhanh',
+            'ghtk' => 'Giao Hàng Tiết Kiệm',
+            'viettel_post' => 'Viettel Post',
+            'jt_express' => 'J&T Express',
+            'ninja_van' => 'Ninja Van',
+            'best_express' => 'Best Express',
+            'shopee_express' => 'Shopee Express',
+            'grab_express' => 'Grab Express',
+            'lalamove' => 'Lalamove',
+            'self' => 'Tự giao',
+            'other' => 'Khác',
+        ];
+        
+        return $carriers[$this->shipping_carrier] ?? $this->shipping_carrier;
+    }
+    
+    /**
+     * Thêm lịch sử vận chuyển
+     */
+    public function addShippingHistory(string $status, string $description, ?string $location = null)
+    {
+        $history = $this->shipping_history ?? [];
+        $history[] = [
+            'status' => $status,
+            'description' => $description,
+            'location' => $location,
+            'timestamp' => now()->toIso8601String(),
+        ];
+        $this->shipping_history = $history;
+        return $this;
     }
 }

@@ -622,6 +622,22 @@ class OrderController extends Controller
                 'Thanh toan don hang #' . $order->order_number
             );
 
+            // ✅ KIỂM TRA KẾT QUẢ DEDUCT
+            if (!$buyerTransaction) {
+                DB::rollBack();
+                $currentBalance = $wallet->available_balance;
+                $needMore = $order->final_amount - $currentBalance;
+                
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'So du vi khong du. Vui long nap them tien.',
+                    'wallet_balance' => $currentBalance,
+                    'order_amount' => $order->final_amount,
+                    'need_more' => $needMore,
+                    'requires_deposit' => true,
+                ], 422);
+            }
+
             // Chuyển tiền cho seller (trừ phí sàn)
             $sellerWallet = Wallet::firstOrCreate(
                 ['user_id' => $order->seller_id],
@@ -719,7 +735,11 @@ class OrderController extends Controller
 
     /**
      * PUT /api/orders/{id}
-     * Cập nhật đơn hàng (seller xác nhận, cập nhật tracking)
+     * Cập nhật đơn hàng (seller xác nhận, cập nhật tracking, cập nhật vận chuyển)
+     * 
+     * Hỗ trợ cả 2 cách:
+     * 1. Cập nhật status đơn giản: { "status": "shipping" }
+     * 2. Cập nhật vận chuyển đầy đủ: { "status": "shipping", "shipping_carrier": "ghn", ... }
      */
     public function update(Request $request, $id)
     {
@@ -751,9 +771,15 @@ class OrderController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'status' => 'required|in:pending,confirmed,processing,shipping,delivered,completed,cancelled',
+                'status' => 'nullable|in:pending,confirmed,processing,shipping,delivered,completed,cancelled',
                 'tracking_number' => 'nullable|string|max:100',
                 'note' => 'nullable|string|max:500',
+                // Shipping fields
+                'shipping_carrier' => 'nullable|string|in:ghn,ghtk,viettel_post,jt_express,ninja_van,best_express,shopee_express,grab_express,lalamove,self,other',
+                'shipper_name' => 'nullable|string|max:100',
+                'shipper_phone' => 'nullable|string|max:20',
+                'estimated_delivery_at' => 'nullable|date',
+                'shipping_note' => 'nullable|string|max:500',
             ]);
 
             if ($validator->fails()) {
@@ -771,33 +797,97 @@ class OrderController extends Controller
                     'message' => 'Cannot update order that is completed, cancelled or refunded'
                 ], 400);
             }
+            
+            // Kiểm tra đơn hàng đã thanh toán chưa (chỉ cho phép cập nhật đơn đã thanh toán)
+            if ($order->payment_status !== 'paid' && $request->status && $request->status !== 'cancelled') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Don hang chua thanh toan. Chi co the huy don hang.',
+                    'current_status' => $order->status,
+                    'payment_status' => $order->payment_status,
+                ], 400);
+            }
 
             DB::beginTransaction();
 
-            $updateData = ['status' => $request->status];
+            $updateData = [];
+            $newStatus = $request->status ?? $order->status;
+            
+            // Chỉ cập nhật status nếu có gửi lên
+            if ($request->has('status') && $request->status) {
+                $updateData['status'] = $request->status;
+            }
 
             // Update timestamps based on status
-            if ($request->status === 'shipping' && !$order->shipped_at) {
+            if ($newStatus === 'shipping' && !$order->shipped_at) {
                 $updateData['shipped_at'] = now();
+                // Tính thời gian tự động hoàn thành (7 ngày sau khi giao)
+                $updateData['auto_complete_at'] = now()->addDays(7);
             }
 
-            if ($request->status === 'delivered' && !$order->delivered_at) {
+            if ($newStatus === 'delivered' && !$order->delivered_at) {
                 $updateData['delivered_at'] = now();
-                $updateData['payment_status'] = 'paid'; // Auto mark as paid when delivered
+                // Cập nhật thời gian tự động hoàn thành (3 ngày sau khi giao)
+                $updateData['auto_complete_at'] = now()->addDays(3);
             }
 
+            // Cập nhật tracking number
             if ($request->has('tracking_number')) {
                 $updateData['tracking_number'] = $request->tracking_number;
             }
+            
+            // Cập nhật thông tin vận chuyển
+            if ($request->has('shipping_carrier')) {
+                $updateData['shipping_carrier'] = $request->shipping_carrier;
+            }
+            if ($request->has('shipper_name')) {
+                $updateData['shipper_name'] = $request->shipper_name;
+            }
+            if ($request->has('shipper_phone')) {
+                $updateData['shipper_phone'] = $request->shipper_phone;
+            }
+            if ($request->has('estimated_delivery_at')) {
+                $updateData['estimated_delivery_at'] = $request->estimated_delivery_at;
+            }
+            if ($request->has('shipping_note')) {
+                $updateData['shipping_note'] = $request->shipping_note;
+            }
+            
+            // Nếu không có gì để cập nhật
+            if (empty($updateData)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Khong co du lieu de cap nhat'
+                ], 400);
+            }
 
             $order->update($updateData);
+            
+            // Thêm vào lịch sử vận chuyển nếu có thay đổi status
+            if ($request->has('status') && $request->status) {
+                $statusLabels = [
+                    'confirmed' => 'Da xac nhan don hang',
+                    'processing' => 'Dang chuan bi hang',
+                    'shipping' => 'Dang giao hang',
+                    'delivered' => 'Da giao hang',
+                ];
+                if (isset($statusLabels[$request->status])) {
+                    $order->addShippingHistory($request->status, $statusLabels[$request->status], null);
+                    $order->save();
+                }
+            }
 
             // Send notification to buyer
+            $notificationMessage = $request->status 
+                ? "Đơn hàng #{$order->order_number} đã được cập nhật: " . $order->status_label
+                : "Đơn hàng #{$order->order_number} đã được cập nhật thông tin vận chuyển";
+            
             Notification::create([
                 'user_id' => $order->buyer_id,
                 'title' => 'Cập nhật đơn hàng',
-                'message' => "Đơn hàng #{$order->order_number} đã được cập nhật: " . $request->status,
+                'message' => $notificationMessage,
                 'type' => 'order',
+                'data' => ['order_id' => $order->id],
             ]);
 
             DB::commit();
@@ -809,7 +899,13 @@ class OrderController extends Controller
                     'id' => $order->id,
                     'order_number' => $order->order_number,
                     'status' => $order->status,
+                    'status_label' => $order->status_label,
                     'tracking_number' => $order->tracking_number,
+                    'shipping_carrier' => $order->shipping_carrier,
+                    'shipping_carrier_name' => $order->shipping_carrier_name,
+                    'shipper_name' => $order->shipper_name,
+                    'shipper_phone' => $order->shipper_phone,
+                    'shipped_at' => $order->shipped_at,
                     'updated_at' => $order->updated_at,
                 ]
             ]);
@@ -921,7 +1017,7 @@ class OrderController extends Controller
     
     /**
      * POST /api/orders/{id}/confirm-received
-     * Buyer xác nhận đã nhận hàng
+     * Buyer xác nhận đã nhận hàng (YÊU CẦU CHỤP HÌNH ẢNH)
      */
     public function confirmReceived(Request $request, $id)
     {
@@ -933,6 +1029,21 @@ class OrderController extends Controller
                     'status' => 'error',
                     'message' => 'Unauthorized'
                 ], 401);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'images' => 'required|array|min:1|max:5',
+                'images.*' => 'required|string', // URL hoặc base64
+                'note' => 'nullable|string|max:500',
+                'condition' => 'nullable|in:good,damaged,missing_items,wrong_item',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Vui long chup it nhat 1 hinh anh xac nhan nhan hang',
+                    'errors' => $validator->errors()
+                ], 400);
             }
 
             $order = Order::find($id);
@@ -960,18 +1071,43 @@ class OrderController extends Controller
                 ], 400);
             }
 
+            $condition = $request->input('condition', 'good');
+            
+            // Nếu hàng có vấn đề, không tự động hoàn thành
+            $newStatus = $condition === 'good' ? 'completed' : 'delivered';
+            
             $order->update([
-                'status' => 'completed',
+                'status' => $newStatus,
                 'delivered_at' => $order->delivered_at ?? now(),
+                'buyer_confirmed_at' => now(),
+                'delivery_confirmation_images' => $request->images,
+                'delivery_confirmation_note' => $request->note,
+                'delivery_condition' => $condition,
             ]);
+            
+            // Thêm vào lịch sử vận chuyển
+            $order->addShippingHistory(
+                'buyer_confirmed',
+                'Nguoi mua da xac nhan nhan hang' . ($condition !== 'good' ? ' (Co van de: ' . $condition . ')' : ''),
+                null
+            );
+            $order->save();
 
             // Thông báo cho seller
+            $notificationMessage = $condition === 'good' 
+                ? "Don hang #{$order->order_number} da duoc nguoi mua xac nhan nhan hang thanh cong."
+                : "Don hang #{$order->order_number} da duoc nguoi mua xac nhan nhan hang nhung co van de: {$condition}. Vui long lien he nguoi mua.";
+            
             Notification::create([
                 'user_id' => $order->seller_id,
                 'title' => 'Nguoi mua da xac nhan nhan hang',
-                'message' => "Don hang #{$order->order_number} da duoc nguoi mua xac nhan nhan hang thanh cong.",
+                'message' => $notificationMessage,
                 'type' => 'order',
-                'data' => ['order_id' => $order->id],
+                'data' => [
+                    'order_id' => $order->id,
+                    'condition' => $condition,
+                    'images' => $request->images,
+                ],
             ]);
 
             return response()->json([
@@ -981,7 +1117,323 @@ class OrderController extends Controller
                     'id' => $order->id,
                     'order_number' => $order->order_number,
                     'status' => $order->status,
-                    'can_review' => true,
+                    'status_label' => $order->status_label,
+                    'buyer_confirmed_at' => $order->buyer_confirmed_at,
+                    'delivery_condition' => $order->delivery_condition,
+                    'can_review' => $condition === 'good',
+                    'can_request_refund' => $condition !== 'good',
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Loi server',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * PUT /api/orders/{id}/shipping
+     * Seller cập nhật thông tin vận chuyển
+     */
+    public function updateShipping(Request $request, $id)
+    {
+        try {
+            $user = auth('api')->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'shipping_carrier' => 'required|string|in:ghn,ghtk,viettel_post,jt_express,ninja_van,best_express,shopee_express,grab_express,lalamove,self,other',
+                'tracking_number' => 'nullable|string|max:100',
+                'shipper_name' => 'nullable|string|max:100',
+                'shipper_phone' => 'nullable|string|max:20',
+                'estimated_delivery_at' => 'nullable|date',
+                'shipping_note' => 'nullable|string|max:500',
+                'actual_shipping_fee' => 'nullable|numeric|min:0',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Du lieu khong hop le',
+                    'errors' => $validator->errors()
+                ], 400);
+            }
+
+            $order = Order::find($id);
+
+            if (!$order) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Don hang khong ton tai'
+                ], 404);
+            }
+
+            // Chỉ seller mới được cập nhật
+            if ($user->role !== 'admin' && $order->seller_id != $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Ban khong co quyen cap nhat don hang nay'
+                ], 403);
+            }
+
+            // Kiểm tra trạng thái
+            if (!in_array($order->status, ['confirmed', 'processing', 'shipping'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Chi co the cap nhat van chuyen cho don hang da xac nhan hoac dang xu ly'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            $updateData = [
+                'shipping_carrier' => $request->shipping_carrier,
+                'tracking_number' => $request->tracking_number,
+                'shipper_name' => $request->shipper_name,
+                'shipper_phone' => $request->shipper_phone,
+                'estimated_delivery_at' => $request->estimated_delivery_at,
+                'shipping_note' => $request->shipping_note,
+            ];
+            
+            if ($request->has('actual_shipping_fee')) {
+                $updateData['actual_shipping_fee'] = $request->actual_shipping_fee;
+            }
+            
+            // Nếu chưa shipping thì chuyển sang shipping
+            if ($order->status !== 'shipping') {
+                $updateData['status'] = 'shipping';
+                $updateData['shipped_at'] = now();
+                
+                // Tính thời gian tự động hoàn thành (7 ngày sau khi giao)
+                $updateData['auto_complete_at'] = now()->addDays(7);
+            }
+
+            $order->update($updateData);
+            
+            // Thêm vào lịch sử vận chuyển
+            $order->addShippingHistory(
+                'shipping_started',
+                'Don hang bat dau van chuyen qua ' . $order->shipping_carrier_name,
+                null
+            );
+            $order->save();
+
+            // Thông báo cho buyer
+            Notification::create([
+                'user_id' => $order->buyer_id,
+                'title' => 'Don hang dang duoc giao',
+                'message' => "Don hang #{$order->order_number} dang duoc giao boi {$order->shipping_carrier_name}." . 
+                    ($request->tracking_number ? " Ma van don: {$request->tracking_number}" : ''),
+                'type' => 'order',
+                'data' => [
+                    'order_id' => $order->id,
+                    'tracking_number' => $request->tracking_number,
+                    'shipping_carrier' => $request->shipping_carrier,
+                ],
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Da cap nhat thong tin van chuyen',
+                'data' => [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'status' => $order->status,
+                    'status_label' => $order->status_label,
+                    'shipping_carrier' => $order->shipping_carrier,
+                    'shipping_carrier_name' => $order->shipping_carrier_name,
+                    'tracking_number' => $order->tracking_number,
+                    'shipper_name' => $order->shipper_name,
+                    'shipper_phone' => $order->shipper_phone,
+                    'estimated_delivery_at' => $order->estimated_delivery_at,
+                    'shipped_at' => $order->shipped_at,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Loi server',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * POST /api/orders/{id}/mark-delivered
+     * Seller/Shipper đánh dấu đã giao hàng (có thể upload hình ảnh)
+     */
+    public function markDelivered(Request $request, $id)
+    {
+        try {
+            $user = auth('api')->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'proof_images' => 'nullable|array|max:5',
+                'proof_images.*' => 'string',
+                'note' => 'nullable|string|max:500',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Du lieu khong hop le',
+                    'errors' => $validator->errors()
+                ], 400);
+            }
+
+            $order = Order::find($id);
+
+            if (!$order) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Don hang khong ton tai'
+                ], 404);
+            }
+
+            // Chỉ seller mới được đánh dấu
+            if ($user->role !== 'admin' && $order->seller_id != $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Ban khong co quyen cap nhat don hang nay'
+                ], 403);
+            }
+
+            // Kiểm tra trạng thái
+            if ($order->status !== 'shipping') {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Chi co the danh dau da giao cho don hang dang van chuyen'
+                ], 400);
+            }
+
+            $order->update([
+                'status' => 'delivered',
+                'delivered_at' => now(),
+                'delivery_proof_images' => $request->proof_images,
+                // Cập nhật thời gian tự động hoàn thành (3 ngày sau khi giao)
+                'auto_complete_at' => now()->addDays(3),
+            ]);
+            
+            // Thêm vào lịch sử vận chuyển
+            $order->addShippingHistory(
+                'delivered',
+                'Don hang da duoc giao' . ($request->note ? '. Ghi chu: ' . $request->note : ''),
+                null
+            );
+            $order->save();
+
+            // Thông báo cho buyer
+            Notification::create([
+                'user_id' => $order->buyer_id,
+                'title' => 'Don hang da duoc giao',
+                'message' => "Don hang #{$order->order_number} da duoc giao. Vui long xac nhan nhan hang va chup hinh san pham.",
+                'type' => 'order',
+                'data' => [
+                    'order_id' => $order->id,
+                    'requires_confirmation' => true,
+                ],
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Da danh dau don hang da giao',
+                'data' => [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'status' => $order->status,
+                    'status_label' => $order->status_label,
+                    'delivered_at' => $order->delivered_at,
+                    'auto_complete_at' => $order->auto_complete_at,
+                    'waiting_buyer_confirmation' => true,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Loi server',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * GET /api/orders/{id}/tracking
+     * Lấy thông tin tracking và lịch sử vận chuyển
+     */
+    public function getTracking($id)
+    {
+        try {
+            $user = auth('api')->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            $order = Order::find($id);
+
+            if (!$order) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Don hang khong ton tai'
+                ], 404);
+            }
+
+            // Kiểm tra quyền xem
+            if ($user->role !== 'admin' && $order->buyer_id != $user->id && $order->seller_id != $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Ban khong co quyen xem don hang nay'
+                ], 403);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'order_number' => $order->order_number,
+                    'status' => $order->status,
+                    'status_label' => $order->status_label,
+                    'shipping' => [
+                        'carrier' => $order->shipping_carrier,
+                        'carrier_name' => $order->shipping_carrier_name,
+                        'tracking_number' => $order->tracking_number,
+                        'shipper_name' => $order->shipper_name,
+                        'shipper_phone' => $order->shipper_phone,
+                        'estimated_delivery_at' => $order->estimated_delivery_at,
+                        'shipped_at' => $order->shipped_at,
+                        'delivered_at' => $order->delivered_at,
+                        'shipping_note' => $order->shipping_note,
+                    ],
+                    'confirmation' => [
+                        'buyer_confirmed_at' => $order->buyer_confirmed_at,
+                        'delivery_condition' => $order->delivery_condition,
+                        'delivery_confirmation_images' => $order->delivery_confirmation_images,
+                        'delivery_confirmation_note' => $order->delivery_confirmation_note,
+                        'delivery_proof_images' => $order->delivery_proof_images,
+                    ],
+                    'history' => $order->shipping_history ?? [],
+                    'auto_complete_at' => $order->auto_complete_at,
+                    'can_confirm' => $order->canConfirmReceived() && $order->buyer_id == $user->id,
                 ]
             ]);
         } catch (\Exception $e) {

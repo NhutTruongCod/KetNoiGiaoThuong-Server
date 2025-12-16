@@ -112,8 +112,18 @@ class Wallet extends Model
 
     public function deduct($amount, $type, $referenceType = null, $referenceId = null, $description = null)
     {
-        if ($this->balance < $amount) {
-            throw new \Exception('Số dư không đủ');
+        // ✅ SỬA: Kiểm tra available_balance thay vì balance
+        // available_balance = balance - frozen_balance
+        if ($this->available_balance < $amount) {
+            \Log::warning('Insufficient wallet balance', [
+                'user_id' => $this->user_id,
+                'balance' => $this->balance,
+                'frozen_balance' => $this->frozen_balance,
+                'available_balance' => $this->available_balance,
+                'requested_amount' => $amount
+            ]);
+            // ✅ Trả về false thay vì throw exception
+            return false;
         }
 
         $balanceBefore = $this->balance;
