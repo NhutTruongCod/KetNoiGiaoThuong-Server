@@ -314,7 +314,9 @@ Authorization: Bearer {{token}}
 
 ## 4. Cập nhật đơn hàng – PUT /orders/{id}
 
-**Mục đích:** Cập nhật trạng thái đơn hàng (seller xác nhận, cập nhật tracking, etc).
+**Mục đích:** Cập nhật trạng thái đơn hàng và thông tin vận chuyển (seller xác nhận, cập nhật tracking, etc).
+
+**Lưu ý:** Đơn hàng phải đã thanh toán mới có thể cập nhật trạng thái (trừ hủy đơn).
 
 ### Request
 
@@ -325,31 +327,42 @@ Authorization: Bearer {{token}}
 ```
 Content-Type: application/json
 Accept: application/json
-Authorization: Bearer {{token}}
+Authorization: Bearer {{seller_token}}
 ```
 
 **Body → raw → JSON:**
+
+**Cập nhật trạng thái đơn giản:**
 ```json
 {
-  "status": "confirmed",
-  "note": "Đơn hàng đã được xác nhận, sẽ giao trong 2-3 ngày"
+  "status": "processing"
 }
 ```
 
-**Hoặc cập nhật tracking:**
+**Cập nhật vận chuyển đầy đủ:**
 ```json
 {
   "status": "shipping",
-  "tracking_number": "VN123456789",
-  "note": "Đơn hàng đang được giao bởi Giao Hàng Nhanh"
+  "shipping_carrier": "ghn",
+  "tracking_number": "GHN123456789",
+  "shipper_name": "Nguyễn Văn Shipper",
+  "shipper_phone": "0901234567",
+  "estimated_delivery_at": "2025-12-15T10:00:00Z",
+  "shipping_note": "Giao trong giờ hành chính"
 }
 ```
 
-**Hoặc xác nhận đã giao:**
+**Đánh dấu đã giao:**
 ```json
 {
-  "status": "delivered",
-  "note": "Đã giao hàng thành công"
+  "status": "delivered"
+}
+```
+
+**Chỉ cập nhật tracking (không đổi status):**
+```json
+{
+  "tracking_number": "GHN123456789"
 }
 ```
 
@@ -358,20 +371,38 @@ Authorization: Bearer {{token}}
 **Success (200):**
 ```json
 {
+  "status": "success",
   "message": "Order updated successfully",
   "data": {
     "id": 1,
     "order_number": "ORD-20251201-0001",
-    "status": "confirmed",
-    "tracking_number": null,
-    "updated_at": "2025-12-01T11:00:00.000000Z"
+    "status": "shipping",
+    "status_label": "Đang giao",
+    "tracking_number": "GHN123456789",
+    "shipping_carrier": "ghn",
+    "shipping_carrier_name": "Giao Hàng Nhanh",
+    "shipper_name": "Nguyễn Văn Shipper",
+    "shipper_phone": "0901234567",
+    "shipped_at": "2025-12-12T08:00:00.000000Z",
+    "updated_at": "2025-12-12T08:00:00.000000Z"
   }
+}
+```
+
+**Error - Đơn hàng chưa thanh toán (400):**
+```json
+{
+  "status": "error",
+  "message": "Don hang chua thanh toan. Chi co the huy don hang.",
+  "current_status": "pending",
+  "payment_status": "unpaid"
 }
 ```
 
 **Error - Không có quyền (403):**
 ```json
 {
+  "status": "error",
   "message": "Only shop owner can update order status"
 }
 ```
@@ -379,7 +410,8 @@ Authorization: Bearer {{token}}
 **Error - Trạng thái không hợp lệ (400):**
 ```json
 {
-  "message": "Cannot change status from completed to pending"
+  "status": "error",
+  "message": "Cannot update order that is completed, cancelled or refunded"
 }
 ```
 
@@ -452,12 +484,28 @@ Authorization: Bearer {{token}}
 
 ```
 pending → confirmed → processing → shipping → delivered → completed
-   ↓
-cancelled
+   ↓                                              ↓
+cancelled                                    (buyer xác nhận + chụp ảnh)
 ```
+
+**Các trạng thái đơn hàng:**
+| Status | Tiếng Việt | Mô tả |
+|--------|------------|-------|
+| `pending` | Chờ thanh toán | Đơn hàng mới tạo, chờ buyer thanh toán |
+| `confirmed` | Đã xác nhận | Seller đã xác nhận đơn hàng |
+| `processing` | Đang chuẩn bị | Seller đang chuẩn bị hàng |
+| `shipping` | Đang giao | Đơn hàng đang được vận chuyển |
+| `delivered` | Đã giao | Shipper đã giao hàng, chờ buyer xác nhận |
+| `completed` | Hoàn thành | Buyer đã xác nhận nhận hàng |
+| `cancelled` | Đã hủy | Đơn hàng bị hủy |
+| `refunded` | Đã hoàn tiền | Đơn hàng đã được hoàn tiền |
 
 **Buyer có thể hủy:** pending, confirmed  
 **Seller có thể hủy:** pending, confirmed, processing
+
+**Lưu ý quan trọng:**
+- Khi đơn hàng ở trạng thái `delivered`, buyer PHẢI xác nhận nhận hàng và chụp ít nhất 1 hình ảnh
+- Nếu buyer không xác nhận trong 3 ngày, đơn hàng sẽ tự động hoàn thành
 
 ---
 
@@ -505,3 +553,254 @@ if (pm.response.code === 201) {
 - Payment method COD không cần thanh toán trước
 - VNPay/Momo cần redirect đến payment gateway
 - Tracking number giúp buyer theo dõi đơn hàng
+
+---
+
+## 6. Cập nhật thông tin vận chuyển – PUT /orders/{id}/shipping
+
+**Mục đích:** Seller cập nhật thông tin vận chuyển cho đơn hàng.
+
+### Request
+
+**Method:** `PUT`  
+**URL:** `{{base_url}}/orders/1/shipping`
+
+**Headers:**
+```
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{seller_token}}
+```
+
+**Body → raw → JSON:**
+```json
+{
+  "shipping_carrier": "ghn",
+  "tracking_number": "GHN123456789",
+  "shipper_name": "Nguyễn Văn Shipper",
+  "shipper_phone": "0901234567",
+  "estimated_delivery_at": "2025-12-15T10:00:00Z",
+  "shipping_note": "Giao trong giờ hành chính",
+  "actual_shipping_fee": 25000
+}
+```
+
+**Shipping Carriers:**
+| Code | Tên đơn vị |
+|------|-----------|
+| `ghn` | Giao Hàng Nhanh |
+| `ghtk` | Giao Hàng Tiết Kiệm |
+| `viettel_post` | Viettel Post |
+| `jt_express` | J&T Express |
+| `ninja_van` | Ninja Van |
+| `best_express` | Best Express |
+| `shopee_express` | Shopee Express |
+| `grab_express` | Grab Express |
+| `lalamove` | Lalamove |
+| `self` | Tự giao |
+| `other` | Khác |
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Da cap nhat thong tin van chuyen",
+  "data": {
+    "id": 1,
+    "order_number": "ORD-20251201-0001",
+    "status": "shipping",
+    "status_label": "Đang giao",
+    "shipping_carrier": "ghn",
+    "shipping_carrier_name": "Giao Hàng Nhanh",
+    "tracking_number": "GHN123456789",
+    "shipper_name": "Nguyễn Văn Shipper",
+    "shipper_phone": "0901234567",
+    "estimated_delivery_at": "2025-12-15T10:00:00.000000Z",
+    "shipped_at": "2025-12-12T08:00:00.000000Z"
+  }
+}
+```
+
+---
+
+## 7. Đánh dấu đã giao hàng – POST /orders/{id}/mark-delivered
+
+**Mục đích:** Seller/Shipper đánh dấu đơn hàng đã được giao (có thể upload hình ảnh chứng minh).
+
+### Request
+
+**Method:** `POST`  
+**URL:** `{{base_url}}/orders/1/mark-delivered`
+
+**Headers:**
+```
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{seller_token}}
+```
+
+**Body → raw → JSON:**
+```json
+{
+  "proof_images": [
+    "https://example.com/delivery-proof-1.jpg",
+    "https://example.com/delivery-proof-2.jpg"
+  ],
+  "note": "Đã giao cho người nhận tại địa chỉ"
+}
+```
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Da danh dau don hang da giao",
+  "data": {
+    "id": 1,
+    "order_number": "ORD-20251201-0001",
+    "status": "delivered",
+    "status_label": "Đã giao",
+    "delivered_at": "2025-12-13T14:30:00.000000Z",
+    "auto_complete_at": "2025-12-16T14:30:00.000000Z",
+    "waiting_buyer_confirmation": true
+  }
+}
+```
+
+---
+
+## 8. Xác nhận nhận hàng (Buyer) – POST /orders/{id}/confirm-received
+
+**Mục đích:** Buyer xác nhận đã nhận hàng. **BẮT BUỘC phải chụp ít nhất 1 hình ảnh.**
+
+### Request
+
+**Method:** `POST`  
+**URL:** `{{base_url}}/orders/1/confirm-received`
+
+**Headers:**
+```
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer {{buyer_token}}
+```
+
+**Body → raw → JSON:**
+```json
+{
+  "images": [
+    "https://example.com/received-1.jpg",
+    "https://example.com/received-2.jpg"
+  ],
+  "note": "Hàng đúng mô tả, đóng gói cẩn thận",
+  "condition": "good"
+}
+```
+
+**Delivery Condition:**
+| Code | Mô tả |
+|------|-------|
+| `good` | Hàng tốt, đúng mô tả |
+| `damaged` | Hàng bị hư hỏng |
+| `missing_items` | Thiếu hàng |
+| `wrong_item` | Sai hàng |
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "message": "Da xac nhan nhan hang thanh cong!",
+  "data": {
+    "id": 1,
+    "order_number": "ORD-20251201-0001",
+    "status": "completed",
+    "status_label": "Hoàn thành",
+    "buyer_confirmed_at": "2025-12-13T15:00:00.000000Z",
+    "delivery_condition": "good",
+    "can_review": true,
+    "can_request_refund": false
+  }
+}
+```
+
+**Error - Thiếu hình ảnh (400):**
+```json
+{
+  "status": "error",
+  "message": "Vui long chup it nhat 1 hinh anh xac nhan nhan hang",
+  "errors": {
+    "images": ["The images field is required."]
+  }
+}
+```
+
+---
+
+## 9. Lấy thông tin tracking – GET /orders/{id}/tracking
+
+**Mục đích:** Xem thông tin vận chuyển và lịch sử tracking của đơn hàng.
+
+### Request
+
+**Method:** `GET`  
+**URL:** `{{base_url}}/orders/1/tracking`
+
+**Headers:**
+```
+Accept: application/json
+Authorization: Bearer {{token}}
+```
+
+### Response mẫu
+
+**Success (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "order_number": "ORD-20251201-0001",
+    "status": "delivered",
+    "status_label": "Đã giao",
+    "shipping": {
+      "carrier": "ghn",
+      "carrier_name": "Giao Hàng Nhanh",
+      "tracking_number": "GHN123456789",
+      "shipper_name": "Nguyễn Văn Shipper",
+      "shipper_phone": "0901234567",
+      "estimated_delivery_at": "2025-12-15T10:00:00.000000Z",
+      "shipped_at": "2025-12-12T08:00:00.000000Z",
+      "delivered_at": "2025-12-13T14:30:00.000000Z",
+      "shipping_note": "Giao trong giờ hành chính"
+    },
+    "confirmation": {
+      "buyer_confirmed_at": null,
+      "delivery_condition": null,
+      "delivery_confirmation_images": null,
+      "delivery_confirmation_note": null,
+      "delivery_proof_images": ["https://example.com/proof.jpg"]
+    },
+    "history": [
+      {
+        "status": "shipping_started",
+        "description": "Don hang bat dau van chuyen qua Giao Hàng Nhanh",
+        "location": null,
+        "timestamp": "2025-12-12T08:00:00+07:00"
+      },
+      {
+        "status": "delivered",
+        "description": "Don hang da duoc giao",
+        "location": null,
+        "timestamp": "2025-12-13T14:30:00+07:00"
+      }
+    ],
+    "auto_complete_at": "2025-12-16T14:30:00.000000Z",
+    "can_confirm": true
+  }
+}
+```

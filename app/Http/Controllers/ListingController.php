@@ -15,50 +15,75 @@ class ListingController extends Controller
 {
     /**
      * GET - Lấy danh sách bài đăng
+     * Ưu tiên hiển thị listings có promotion (top_search, featured) lên đầu
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Listing::with(['user', 'shop'])->active();
+            $query = Listing::with(['user', 'shop'])
+                ->where('listings.is_active', true);
 
             // Tìm kiếm theo tiêu đề
             if ($request->has('search') && $request->search) {
-                $query->search($request->search);
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('listings.title', 'like', "%{$search}%")
+                      ->orWhere('listings.description', 'like', "%{$search}%");
+                });
             }
 
             // Lọc theo category
             if ($request->has('category') && $request->category) {
-                $query->where('category', $request->category);
+                $query->where('listings.category', $request->category);
             }
 
             // Lọc theo shop_id
             if ($request->has('shop_id') && $request->shop_id) {
-                $query->where('shop_id', $request->shop_id);
+                $query->where('listings.shop_id', $request->shop_id);
             }
 
             // Lọc theo type
             if ($request->has('type') && $request->type) {
-                $query->where('type', $request->type);
+                $query->where('listings.type', $request->type);
             }
 
             // Lọc theo status
             if ($request->has('status') && $request->status) {
-                $query->where('status', $request->status);
+                $query->where('listings.status', $request->status);
             }
 
-            // Phân trang
+            // Join với promotions để ưu tiên listings có quảng cáo lên đầu
+            $query->leftJoin('promotions', function ($join) {
+                $join->on('listings.id', '=', 'promotions.listing_id')
+                     ->where('promotions.status', '=', 'active')
+                     ->whereIn('promotions.type', ['top_search', 'featured'])
+                     ->whereRaw('promotions.end_date >= CURDATE()');
+            })
+            ->select('listings.*')
+            ->selectRaw('CASE WHEN promotions.id IS NOT NULL THEN 1 ELSE 0 END as has_promotion')
+            ->selectRaw('COALESCE(promotions.featured_position, 999) as promo_position')
+            ->selectRaw('promotions.id as promotion_id')
+            ->selectRaw('promotions.type as promotion_type');
+
+            // Phân trang - ưu tiên có promotion lên đầu
             $page = $request->get('page', 1);
             $limit = $request->get('limit', 15);
-            $listings = $query->orderBy('created_at', 'desc')
+            $listings = $query->orderByDesc('has_promotion')
+                            ->orderBy('promo_position')
+                            ->orderBy('listings.created_at', 'desc')
                             ->paginate($limit, ['*'], 'page', $page);
 
-            // Thêm stats cho mỗi listing
+            // Thêm stats và thông tin promotion cho mỗi listing
             $listingsWithStats = collect($listings->items())->map(function ($listing) {
                 $stats = [
                     'views_count' => DB::table('page_views')->where('listing_id', $listing->id)->count(),
                     'likes_count' => DB::table('listing_likes')->where('listing_id', $listing->id)->count(),
                     'comments_count' => DB::table('listing_comments')->where('listing_id', $listing->id)->count(),
                     'bookmarks_count' => DB::table('bookmarks')->where('listing_id', $listing->id)->count(),
+                    // Thông tin promotion
+                    'has_promotion' => (bool) ($listing->has_promotion ?? false),
+                    'promotion_id' => $listing->promotion_id ?? null,
+                    'promotion_type' => $listing->promotion_type ?? null,
                 ];
                 
                 return array_merge($listing->toArray(), $stats);
